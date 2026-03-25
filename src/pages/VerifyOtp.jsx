@@ -148,7 +148,9 @@ export default function VerifyOtp() {
           </p>
 
           <p className="auth-footer">
-            <Link to="/login">← Quay lại đăng nhập</Link>
+            <Link to="/">Trang chủ</Link>
+            {' · '}
+            <Link to="/login">Đăng nhập</Link>
           </p>
         </div>
       </main>

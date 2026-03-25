@@ -1,0 +1,230 @@
+.landing {
+  min-height: 100vh;
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.85rem 1.5rem;
+  max-width: 1120px;
+  margin: 0 auto;
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-heading);
+  text-decoration: none;
+}
+
+.landing-brand:hover {
+  text-decoration: none;
+  color: var(--clinic-primary-dark);
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.landing-nav a {
+  font-size: 0.95rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.landing-nav a:hover {
+  color: var(--clinic-primary);
+}
+
+.landing-nav-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.landing-btn:hover {
+  text-decoration: none;
+}
+
+.landing-btn--ghost {
+  background: transparent;
+  color: var(--clinic-primary);
+  border-color: var(--clinic-primary);
+}
+
+.landing-btn--ghost:hover {
+  background: var(--clinic-primary-soft);
+}
+
+.landing-btn--solid {
+  background: var(--clinic-primary);
+  color: #fff !important;
+  border-color: var(--clinic-primary);
+}
+
+.landing-btn--solid:hover {
+  background: var(--clinic-primary-dark);
+  border-color: var(--clinic-primary-dark);
+  color: #fff !important;
+}
+
+/* Đảm bảo Link không bị override bởi rule `a { ... }` hoặc `:visited` */
+.landing-btn--solid:visited,
+.landing-btn--solid:active,
+.landing-btn--solid:focus {
+  color: #fff !important;
+}
+
+.landing-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.landing-hero {
+  padding: 2.5rem 0 2rem;
+  text-align: center;
+}
+
+.landing-hero h1 {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-weight: 700;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.landing-hero p {
+  margin: 0 auto 1.5rem;
+  max-width: 36rem;
+  font-size: 1.05rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.landing-hero-cta {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.landing-section {
+  margin-top: 2.75rem;
+  scroll-margin-top: 72px;
+}
+
+.landing-section h2 {
+  margin: 0 0 1rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.landing-section p {
+  margin: 0 0 0.75rem;
+  line-height: 1.65;
+  max-width: 48rem;
+}
+
+.landing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.landing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.15rem;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.06);
+}
+
+.landing-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.landing-card p {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.landing-info-grid {
+  display: grid;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .landing-info-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.landing-dl {
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.landing-dl dt {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.landing-dl dd {
+  margin: 0;
+  font-size: 0.98rem;
+  color: var(--text-heading);
+}
+
+.landing-footer {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.landing-footer a {
+  color: var(--clinic-primary);
+}

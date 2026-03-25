@@ -132,6 +132,8 @@ export default function Login() {
           </form>
 
           <p className="auth-footer">
+            <Link to="/">Về trang chủ</Link>
+            {' · '}
             Chưa có tài khoản? <Link to="/register">Đăng ký</Link>
           </p>
         </div>

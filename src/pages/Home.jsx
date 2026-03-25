@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import '../styles/auth.css'
 
 function getStoredUser() {
@@ -61,6 +61,9 @@ export default function Home() {
           <button type="button" className="auth-submit" onClick={logout}>
             Đăng xuất
           </button>
+          <p className="auth-footer" style={{ marginTop: '1rem' }}>
+            <Link to="/">Trang chủ phòng khám</Link>
+          </p>
         </div>
       </main>
     </div>
