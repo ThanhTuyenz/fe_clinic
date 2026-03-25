@@ -11,15 +11,41 @@ async function parseJson(res) {
   }
 }
 
-export async function register({ fullName, email, phone, password }) {
+export async function register({ firstName, lastName, email, phone, password }) {
   const res = await fetch(`${base}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fullName, email, phone, password }),
+    body: JSON.stringify({ firstName, lastName, email, phone, password }),
   })
   const data = await parseJson(res)
   if (!res.ok) {
     throw new Error(data.message || 'Đăng ký thất bại.')
+  }
+  return data
+}
+
+export async function verifyEmail({ verificationToken, otp }) {
+  const res = await fetch(`${base}/api/auth/verify-email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ verificationToken, otp: String(otp).trim() }),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Xác thực thất bại.')
+  }
+  return data
+}
+
+export async function resendOtp({ email }) {
+  const res = await fetch(`${base}/api/auth/resend-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Gửi lại mã thất bại.')
   }
   return data
 }
@@ -32,7 +58,12 @@ export async function login({ email, password }) {
   })
   const data = await parseJson(res)
   if (!res.ok) {
-    throw new Error(data.message || 'Đăng nhập thất bại.')
+    const err = new Error(data.message || 'Đăng nhập thất bại.')
+    if (data.code) err.code = data.code
+    if (data.email) err.email = data.email
+    if (data.emailMask) err.emailMask = data.emailMask
+    if (data.verificationToken) err.verificationToken = data.verificationToken
+    throw err
   }
   return data
 }
