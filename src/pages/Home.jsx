@@ -53,7 +53,7 @@ export default function Home() {
         <div className="auth-card">
           <h2>Xin chào</h2>
           <p className="auth-card-sub">
-            {user.fullName || user.email} — {user.role}
+            {user.displayName || user.fullName || user.email} — {user.role}
           </p>
           <p style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: 'var(--muted)' }}>
             {user.email}

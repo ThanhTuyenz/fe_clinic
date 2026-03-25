@@ -37,6 +37,22 @@ export default function Login() {
       }
       navigate('/home', { replace: true })
     } catch (err) {
+      if (
+        err.code === 'EMAIL_NOT_VERIFIED' &&
+        err.verificationToken &&
+        err.email
+      ) {
+        navigate('/verify-otp', {
+          replace: false,
+          state: {
+            verificationToken: err.verificationToken,
+            email: err.email,
+            emailMask: err.emailMask,
+            rememberFromLogin: remember,
+          },
+        })
+        return
+      }
       setError(err.message || 'Đăng nhập thất bại.')
     } finally {
       setLoading(false)
