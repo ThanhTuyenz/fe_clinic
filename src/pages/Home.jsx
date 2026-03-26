@@ -1,5 +1,79 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { listDoctors } from '../api/doctors.js'
 import '../styles/landing.css'
+
+function getDoctorFullName(d) {
+  const first = String(d?.firstName || '').trim()
+  const last = String(d?.lastName || '').trim()
+  const full = `${first} ${last}`.trim()
+  return full || String(d?.displayName || '').trim() || d?.email || ''
+}
+
+function parseDoctorBio(bio) {
+  const s = String(bio || '').trim()
+  if (!s) return { rank: '', specialty: '' }
+
+  let primary = s
+  if (s.includes('—')) primary = s.split('—')[0].trim()
+  else if (s.includes('-')) primary = s.split('-')[0].trim()
+
+  const match = primary.match(/^Bác sĩ\s*(.+)$/i)
+  if (match) return { rank: 'Bác sĩ', specialty: match[1].trim() }
+  return { rank: '', specialty: primary }
+}
+
+function getDoctorRankName(d) {
+  const { rank } = parseDoctorBio(d?.bio)
+  const name = getDoctorFullName(d)
+  return rank ? `${rank} ${name}` : name
+}
+
+function getDoctorInitials(d) {
+  const ln = String(d?.lastName || '').trim()
+  const fn = String(d?.firstName || '').trim()
+
+  const a = ln ? ln[0] : ''
+  const b = fn ? fn[0] : ''
+  if (a || b) return `${a}${b}`.toUpperCase()
+
+  const words = String(getDoctorFullName(d))
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+}
+
+function parseDoctorSpecialty(bio) {
+  return parseDoctorBio(bio).specialty || ''
+}
+
+function getDoctorCardSpecialty(d) {
+  const s = String(d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
+  if (!s) return 'Chuyên khoa'
+  if (s.length > 40 || /kinh nghiệm/i.test(s)) return 'Chuyên khoa'
+  return s
+}
+
+function getDoctorCardExperience(d) {
+  const years = Number(d?.experienceYears ?? d?.yearsOfExperience ?? d?.experience ?? d?.expYears)
+  if (Number.isFinite(years) && years > 0) return `${years} năm kinh nghiệm`
+  return '—'
+}
+
+function normalizeAvatarUrl(url) {
+  const s = String(url || '').trim()
+  if (!s) return ''
+  // upanhlaylink often provides /view/ page; /img/ is the direct file path
+  if (s.includes('sf-static.upanhlaylink.com/view/')) return s.replace('/view/', '/img/')
+  return s
+}
 
 export default function Landing() {
   const navigate = useNavigate()
@@ -22,6 +96,34 @@ export default function Landing() {
 
   const user = getStoredUser()
 
+  const [doctors, setDoctors] = useState([])
+  const [loadingDoctors, setLoadingDoctors] = useState(true)
+  const [doctorError, setDoctorError] = useState('')
+
+  useEffect(() => {
+    let mounted = true
+    setLoadingDoctors(true)
+    setDoctorError('')
+    listDoctors()
+      .then((docs) => {
+        if (!mounted) return
+        setDoctors(docs || [])
+      })
+      .catch((err) => {
+        if (!mounted) return
+        setDoctorError(err.message || 'Không lấy được danh sách bác sĩ.')
+      })
+      .finally(() => {
+        if (!mounted) return
+        setLoadingDoctors(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
+
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -34,7 +136,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
-          Phòng khám ABC
+      <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
         </Link>
         <nav className="landing-nav" aria-label="Điều hướng chính">
           <a href="#gioi-thieu">Giới thiệu</a>
@@ -84,9 +186,8 @@ export default function Landing() {
         <section className="landing-hero" aria-labelledby="landing-title">
           <h1 id="landing-title">Chăm sóc sức khỏe tận tâm, đặt lịch thuận tiện</h1>
           <p>
-            Phòng khám ABC hỗ trợ quy trình khám chữa bệnh minh bạch và đặt lịch
-            khám trực tuyến — bạn có thể xem thông tin phòng khám tại đây mà
-            không cần đăng nhập.
+            VitaCare Clinic hỗ trợ quy trình khám chữa bệnh minh bạch và đặt lịch
+            khám trực tuyến.
           </p>
           <div className="landing-hero-cta">
             {user ? (
@@ -106,22 +207,124 @@ export default function Landing() {
           </div>
         </section>
 
+        <section className="landing-booking" aria-labelledby="sec-booking">
+          <div className="landing-booking-head">
+            <div>
+              <h2 id="sec-booking">Đặt lịch khám trực tuyến</h2>
+              <p className="landing-booking-sub">Tìm bác sĩ chính xác - Đặt lịch khám dễ dàng</p>
+            </div>
+            <Link className="landing-more" to="/appointments">
+              Xem thêm <span aria-hidden="true">›</span>
+            </Link>
+          </div>
+
+          <div className="landing-doctor-strip" role="list" aria-label="Đặt khám bác sĩ">
+            {loadingDoctors
+              ? Array.from({ length: 5 }).map((_, idx) => (
+                  <article className="landing-doctor-card is-skeleton" role="listitem" key={`sk-${idx}`}>
+                    <div className="landing-doctor-avatar" aria-hidden="true" style={{ opacity: 0.55 }}>
+                      ...
+                    </div>
+                    <div className="landing-doctor-name" style={{ opacity: 0.55 }}>
+                      Đang tải...
+                    </div>
+                    <div className="landing-doctor-meta" style={{ opacity: 0.55 }}>
+                      <div className="landing-doctor-spec">...</div>
+                      <div className="landing-doctor-hospital">...</div>
+                    </div>
+                    <span className="landing-doctor-action" aria-hidden="true" style={{ opacity: 0.55 }}>
+                      Đặt lịch khám <span aria-hidden="true">›</span>
+                    </span>
+                  </article>
+                ))
+              : doctorError
+                ? (
+                    <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
+                      {doctorError}
+                    </div>
+                  )
+                : featuredDoctors.map((d) => (
+                    <article
+                      className="landing-doctor-card"
+                      role="listitem"
+                      key={d.id || d.email || getDoctorFullName(d)}
+                      tabIndex={0}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        navigate('/appointments', { state: { doctorId: d.id } })
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate('/appointments', { state: { doctorId: d.id } })
+                        }
+                      }}
+                    >
+                      <div className="landing-doctor-avatar" aria-hidden="true">
+                        <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
+                        {normalizeAvatarUrl(d?.avatarUrl || d?.imageUrl || d?.photoUrl) ? (
+                          <img
+                            className="landing-avatar-img"
+                            src={normalizeAvatarUrl(d.avatarUrl || d.imageUrl || d.photoUrl)}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="landing-doctor-name">{getDoctorRankName(d)}</div>
+                      <div className="landing-doctor-meta">
+                        <div className="landing-doctor-spec">{getDoctorCardSpecialty(d)}</div>
+                        <div className="landing-doctor-hospital">{getDoctorCardExperience(d)}</div>
+                      </div>
+                      <Link
+                        className="landing-doctor-action"
+                        to="/appointments"
+                        onClick={(e) => e.stopPropagation()}
+                        state={{ doctorId: d.id }}
+                      >
+                        Đặt lịch khám <span aria-hidden="true">›</span>
+                      </Link>
+                    </article>
+                  ))}
+          </div>
+        </section>
+
         <section
           id="gioi-thieu"
           className="landing-section"
           aria-labelledby="sec-about"
         >
-          <h2 id="sec-about">Giới thiệu</h2>
-          <p>
-            Phòng khám ABC phục vụ người dân với đội ngũ bác sĩ và nhân viên
-            chuyên nghiệp, trang thiết bị phù hợp khám ngoại trú và tư vấn sức
-            khỏe. Hệ thống quản lý giúp theo dõi lịch hẹn, hồ sơ và quy trình
-            khám rõ ràng cho cả bệnh nhân và nhân viên.
-          </p>
-          <p>
-            Bạn có thể đăng ký tài khoản để đặt lịch khám và nhận thông báo;
-            trang này chỉ mang tính giới thiệu — không yêu cầu đăng nhập.
-          </p>
+          <div className="landing-expert">
+            <div className="landing-expert-head">
+              <h2 id="sec-about">Chuyên gia đầu ngành - bác sĩ giỏi - chuyên viên giàu kinh nghiệm</h2>
+            </div>
+            <p className="landing-expert-sub">
+              Quy tụ đội ngũ chuyên gia đầu ngành, bác sĩ chuyên môn cao, giàu kinh nghiệm.
+            </p>
+
+            <div className="landing-expert-grid" role="list" aria-label="Thống kê đội ngũ">
+              {[
+                { value: '24', label: 'GIÁO SƯ - P. GIÁO SƯ' },
+                { value: '171', label: 'TIẾN SĨ - BÁC SĨ CKII' },
+                { value: '490', label: 'THẠC SĨ - BÁC SĨ CKI' },
+                { value: '786', label: 'BÁC SĨ' },
+              ].map((s) => (
+                <div className="landing-expert-card" role="listitem" key={s.label}>
+                  <div className="landing-expert-num">{s.value}</div>
+                  <div className="landing-expert-label">{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="landing-expert-cta">
+              <Link className="landing-expert-btn" to="/appointments">
+                XEM CÁC CHUYÊN GIA
+              </Link>
+            </div>
+          </div>
         </section>
 
         <section
@@ -215,7 +418,7 @@ export default function Landing() {
 
       <footer className="landing-footer">
         <p>
-          © {new Date().getFullYear()} Phòng khám ABC — Trang giới thiệu công
+          © {new Date().getFullYear()} VitaCare Clinic — Trang giới thiệu công
           khai.{' '}
           {user ? (
             <>

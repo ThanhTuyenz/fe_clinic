@@ -83,7 +83,7 @@ export default function VerifyOtp() {
       <aside className="auth-brand" aria-hidden="false">
         <div className="auth-brand-inner">
           <span className="auth-brand-badge">Xác thực email</span>
-          <h1>Phòng khám ABC</h1>
+          <h1>VitaCare Clinic</h1>
           <p>
             Bạn đăng nhập bằng tài khoản chưa xác thực email. Nhập mã OTP đã
             gửi tới hộp thư để tiếp tục.
