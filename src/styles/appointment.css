@@ -387,6 +387,40 @@
   gap: 10px;
   overflow-x: auto;
   padding: 8px 2px 14px;
+  scroll-behavior: smooth;
+}
+
+.appointment-date-strip-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appointment-strip-arrow {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-heading);
+  font-weight: 950;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.05s;
+  flex: 0 0 auto;
+}
+
+.appointment-strip-arrow:hover {
+  border-color: rgba(13, 148, 136, 0.45);
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.appointment-strip-arrow:active {
+  transform: scale(0.99);
 }
 
 .appointment-date-chip {
@@ -420,6 +454,50 @@
   color: var(--text-heading);
   font-size: 0.95rem;
   line-height: 1.2;
+}
+
+.appointment-date-chip-sub {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: rgba(13, 148, 136, 0.95);
+}
+
+.appointment-date-chip-sub.is-full {
+  color: rgba(220, 38, 38, 0.9);
+}
+
+.appointment-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 6px 0 4px;
+}
+
+.appointment-step-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.appointment-step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.12);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  color: var(--clinic-primary-dark);
+  font-weight: 950;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+}
+
+.appointment-step-title {
+  font-weight: 950;
+  color: var(--text-heading);
 }
 
 .appointment-time-block-label {
@@ -460,6 +538,19 @@
 .appointment-time-slot.is-active {
   border-color: rgba(13, 148, 136, 0.7);
   background: rgba(13, 148, 136, 0.07);
+}
+
+.appointment-time-slot.is-disabled,
+.appointment-time-slot:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  background: rgba(2, 6, 23, 0.03);
+}
+
+.appointment-time-slot.is-disabled:hover,
+.appointment-time-slot:disabled:hover {
+  border-color: var(--border);
+  background: rgba(2, 6, 23, 0.03);
 }
 
 .appointment-intro-title {
@@ -505,6 +596,179 @@
 .appointment-summary-val {
   color: var(--text-heading);
   font-weight: 950;
+}
+
+.appointment-step2-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding-top: 6px;
+}
+
+.appointment-step2-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.appointment-step2-right {
+  flex: 0 0 auto;
+  width: 420px;
+  max-width: 42%;
+}
+
+.appointment-summary-card {
+  padding-bottom: 20px;
+}
+
+.appointment-summary-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.appointment-stepper {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.appointment-stepper-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  background: #fff;
+  font-weight: 900;
+  color: var(--text-heading);
+}
+
+.appointment-stepper-item:last-child {
+  border-bottom: none;
+}
+
+.appointment-stepper-item.is-open {
+  cursor: default;
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.appointment-stepper-circle {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.12);
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--clinic-primary-dark);
+  font-size: 0.85rem;
+}
+
+.appointment-stepper-label {
+  flex: 1 1 auto;
+  text-align: left;
+  font-weight: 950;
+}
+
+.appointment-stepper-chevron {
+  font-size: 1.05rem;
+  opacity: 0.8;
+}
+
+.appointment-patient-section {
+  margin-top: 14px;
+}
+
+.appointment-patient-title {
+  margin: 0 0 12px;
+  font-weight: 950;
+  color: var(--text-heading);
+  font-size: 1.1rem;
+}
+
+.appointment-patient-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+}
+
+.appointment-patient-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.appointment-patient-name {
+  font-weight: 950;
+  color: var(--text-heading);
+}
+
+.appointment-edit-btn {
+  border: 1px solid rgba(13, 148, 136, 0.35);
+  background: rgba(13, 148, 136, 0.06);
+  color: var(--clinic-primary-dark);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.appointment-edit-btn:hover {
+  background: rgba(13, 148, 136, 0.1);
+}
+
+.appointment-patient-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.appointment-patient-row {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.appointment-patient-key {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.appointment-patient-val {
+  font-weight: 950;
+  color: var(--text-heading);
+}
+
+.appointment-patient-val input,
+.appointment-patient-val select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  background: #fff;
+  color: var(--text-heading);
+  font-weight: 800;
+}
+
+.appointment-patient-val input:focus,
+.appointment-patient-val select:focus {
+  outline: none;
+  border-color: var(--clinic-primary);
+  box-shadow: 0 0 0 3px var(--clinic-primary-soft);
+}
+
+.appointment-step2-right .auth-card {
+  max-width: none;
 }
 
 .appointment-summary-note {
@@ -563,5 +827,42 @@
   .appointment-time-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .appointment-strip-arrow {
+    width: 34px;
+    height: 34px;
+    font-size: 1.15rem;
+  }
+
+  .appointment-step2-layout {
+    flex-direction: column;
+  }
+
+  .appointment-step2-right {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .appointment-patient-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+}
+
+.auth-field select {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text-heading);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.auth-field select:focus {
+  outline: none;
+  border-color: var(--clinic-primary);
+  box-shadow: 0 0 0 3px var(--clinic-primary-soft);
 }
 

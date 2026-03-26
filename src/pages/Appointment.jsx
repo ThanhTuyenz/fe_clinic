@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listDoctors } from '../api/doctors.js'
+import { createAppointment } from '../api/appointments.js'
 import '../styles/auth.css'
 import '../styles/appointment.css'
 
@@ -91,6 +92,27 @@ function formatDayShort(date) {
   return `${weekdays[date.getDay()]}, ${dd}-${mm}`
 }
 
+function addMinutesToHHmm(hhmm, minutesToAdd) {
+  const [hh, mm] = String(hhmm || '00:00')
+    .split(':')
+    .map((v) => Number(v))
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(minutesToAdd)) return hhmm
+  const d = new Date()
+  d.setHours(hh)
+  d.setMinutes(mm + minutesToAdd)
+  const eh = d.getHours().toString().padStart(2, '0')
+  const em = d.getMinutes().toString().padStart(2, '0')
+  return `${eh}:${em}`
+}
+
+function simpleSeedFromIso(iso) {
+  // Stable pseudo-random seed based on YYYY-MM-DD
+  const s = String(iso || '')
+  let x = 0
+  for (let i = 0; i < s.length; i += 1) x = (x * 31 + s.charCodeAt(i)) % 100000
+  return x
+}
+
 export default function Appointment() {
   const navigate = useNavigate()
   const { token, user } = useMemo(() => getSession(), [])
@@ -110,8 +132,39 @@ export default function Appointment() {
     return d.toISOString().slice(0, 10)
   })
   const [startTime, setStartTime] = useState('08:00')
+  const [note, setNote] = useState('')
+  const [bookingError, setBookingError] = useState('')
+  const [bookingLoading, setBookingLoading] = useState(false)
+
+  // Demo patient data (replace with API later).
+  const [patients] = useState(() => [
+    {
+      id: 'p1',
+      code: 'YMP262764574',
+      fullName: 'Nguyễn Thanh Tuyền',
+      gender: 'Nam',
+      dob: '22/11/2003',
+      phone: '0378315195',
+    },
+    {
+      id: 'p2',
+      code: 'YMP289104552',
+      fullName: 'Trần Quang Nam',
+      gender: 'Nam',
+      dob: '08/04/1991',
+      phone: '0912345678',
+    },
+  ])
+  const selectedPatient = patients[0] || null
+  const [editingPatient, setEditingPatient] = useState(false)
+  const [patientDraft, setPatientDraft] = useState(() =>
+    patients[0]
+      ? { ...patients[0] }
+      : { id: '', code: '', fullName: '', gender: '', dob: '', phone: '' },
+  )
   
   const scheduleRef = useRef(null)
+  const dateStripRef = useRef(null)
 
   useEffect(() => {
     if (!token || !user) {
@@ -169,19 +222,114 @@ export default function Appointment() {
   }, [])
 
   const timeSlots = useMemo(() => {
-    // UI demo: 6 slots, map to `startTime` as HH:mm
-    // Can be replaced with real API schedule later.
-    const base = ['18:00', '18:20', '18:40', '19:00', '19:20', '19:40']
+    // UI demo: create the same style as screenshot.
+    // Can be replaced with real API schedule later (per doctor + date).
+    const base = [
+      '17:00',
+      '17:12',
+      '17:24',
+      '17:36',
+      '17:48',
+      '18:00',
+      '18:12',
+      '18:24',
+      '18:36',
+      '18:48',
+      '19:00',
+      '19:12',
+      '19:24',
+      '19:36',
+      '19:48',
+      '20:00',
+    ]
     return base.map((t) => {
-      const [hh, mm] = t.split(':').map(Number)
-      const end = new Date()
-      end.setHours(hh)
-      end.setMinutes(mm + 10)
-      const eh = end.getHours().toString().padStart(2, '0')
-      const em = end.getMinutes().toString().padStart(2, '0')
-      return { start: t, label: `${t}-${eh}:${em}` }
+      const end = addMinutesToHHmm(t, 12)
+      return { start: t, end, label: `${t}-${end}` }
     })
   }, [])
+
+  const slotAvailability = useMemo(() => {
+    // Demo only. Replace with API:
+    // GET /api/appointments/availability?doctorId=...&date=...
+    // Return list of disabled start times for selected doctor/date.
+    const seed = simpleSeedFromIso(`${doctorId || 'd'}:${appointmentDate}`)
+    const disabled = new Set()
+    const isFullDay = seed % 7 === 0
+
+    if (isFullDay) {
+      timeSlots.forEach((s) => disabled.add(s.start))
+    } else {
+      const toDisable = Math.min(10, 2 + (seed % 6))
+      for (let i = 0; i < toDisable; i += 1) {
+        const idx = (seed + i * 3) % timeSlots.length
+        disabled.add(timeSlots[idx].start)
+      }
+    }
+
+    const availableCount = timeSlots.length - disabled.size
+    return { disabled, isFullDay, availableCount }
+  }, [doctorId, appointmentDate, timeSlots])
+
+  const upcomingDaysWithMeta = useMemo(() => {
+    return upcomingDays.map((d) => {
+      const seed = simpleSeedFromIso(`${doctorId || 'd'}:${d.iso}`)
+      const isFull = seed % 7 === 0
+      const disabledCount = isFull ? timeSlots.length : Math.min(10, 2 + (seed % 6))
+      const availableCount = Math.max(0, timeSlots.length - disabledCount)
+      return { ...d, isFull, availableCount }
+    })
+  }, [upcomingDays, doctorId, timeSlots.length])
+
+  // Keep selection valid when date changes or becomes unavailable
+  useEffect(() => {
+    if (!slotAvailability.disabled.has(startTime)) return
+    const firstAvailable = timeSlots.find((s) => !slotAvailability.disabled.has(s.start))
+    if (firstAvailable) setStartTime(firstAvailable.start)
+  }, [appointmentDate, doctorId, slotAvailability.disabled, startTime, timeSlots])
+
+  useEffect(() => {
+    if (!selectedPatient) return
+    setPatientDraft({ ...selectedPatient })
+    setEditingPatient(false)
+  }, [selectedPatient])
+
+  function handleBackToStep1() {
+    setBookingError('')
+    setBookingLoading(false)
+    setShowBookingInfo(false)
+    setShowDoctorDetail(Boolean(selectedDoctor))
+    setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0)
+  }
+
+  async function handleConfirmBooking() {
+    setBookingError('')
+    if (!token || !selectedDoctor || !selectedPatient) {
+      setBookingError('Thiếu thông tin để đặt lịch.')
+      return
+    }
+    setBookingLoading(true)
+    try {
+      await createAppointment({
+        token,
+        doctorId,
+        appointmentDate,
+        startTime,
+        note,
+      })
+      navigate('/home', { replace: true })
+    } catch (err) {
+      setBookingError(err.message || 'Đặt lịch thất bại.')
+    } finally {
+      setBookingLoading(false)
+    }
+  }
+
+  function scrollDateStrip(direction) {
+    const el = dateStripRef.current
+    if (!el) return
+    const delta = direction === 'left' ? -260 : 260
+    el.scrollBy({ left: delta, behavior: 'smooth' })
+  }
 
   return (
     <div className="appointment-page">
@@ -246,20 +394,7 @@ export default function Appointment() {
           </>
         ) : (
           showBookingInfo ? (
-            <div className="appointment-topbar">
-              <h2 className="appointment-title">Thông tin đặt khám</h2>
-              <button
-                type="button"
-                className="appointment-back-btn"
-                onClick={() => {
-                  setShowBookingInfo(false)
-                  setShowDoctorDetail(Boolean(selectedDoctor))
-                  setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0)
-                }}
-              >
-                ← Chọn lại giờ
-              </button>
-            </div>
+            null
           ) : (
             <div className="appointment-topbar">
               <h2 className="appointment-title">Đặt khám bác sĩ</h2>
@@ -363,22 +498,52 @@ export default function Appointment() {
               </div>
             </div>
 
-            <div className="appointment-date-strip" role="tablist" aria-label="Chọn ngày">
-              {upcomingDays.map((day) => {
-                const isActive = day.iso === appointmentDate
-                return (
-                  <button
-                    key={day.iso}
-                    type="button"
-                    className={`appointment-date-chip ${isActive ? 'is-active' : ''}`}
-                    onClick={() => setAppointmentDate(day.iso)}
-                    aria-selected={isActive}
-                    role="tab"
-                  >
-                    <div className="appointment-date-chip-day">{day.label}</div>
-                  </button>
-                )
-              })}
+            <div className="appointment-step">
+              <div className="appointment-step-left">
+                <div className="appointment-step-badge" aria-hidden="true">
+                  1
+                </div>
+                <div className="appointment-step-title">Ngày và giờ khám</div>
+              </div>
+            </div>
+
+            <div className="appointment-date-strip-wrap" aria-label="Chọn ngày">
+              <button
+                type="button"
+                className="appointment-strip-arrow"
+                aria-label="Ngày trước"
+                onClick={() => scrollDateStrip('left')}
+              >
+                ‹
+              </button>
+              <div className="appointment-date-strip" ref={dateStripRef} role="tablist" aria-label="Danh sách ngày">
+                {upcomingDaysWithMeta.map((day) => {
+                  const isActive = day.iso === appointmentDate
+                  return (
+                    <button
+                      key={day.iso}
+                      type="button"
+                      className={`appointment-date-chip ${isActive ? 'is-active' : ''}`}
+                      onClick={() => setAppointmentDate(day.iso)}
+                      aria-selected={isActive}
+                      role="tab"
+                    >
+                      <div className="appointment-date-chip-day">{day.label}</div>
+                      <div className={`appointment-date-chip-sub ${day.isFull ? 'is-full' : ''}`}>
+                        {day.isFull ? 'Đã đầy lịch' : `${day.availableCount} khung giờ`}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              <button
+                type="button"
+                className="appointment-strip-arrow"
+                aria-label="Ngày tiếp theo"
+                onClick={() => scrollDateStrip('right')}
+              >
+                ›
+              </button>
             </div>
 
             <div className="appointment-time-block">
@@ -388,12 +553,15 @@ export default function Appointment() {
               <div className="appointment-time-grid">
                 {timeSlots.map((slot) => {
                   const isActive = slot.start === startTime
+                  const isDisabled = slotAvailability.disabled.has(slot.start)
                   return (
                     <button
                       key={slot.start}
                       type="button"
-                      className={`appointment-time-slot ${isActive ? 'is-active' : ''}`}
+                      className={`appointment-time-slot ${isActive ? 'is-active' : ''} ${isDisabled ? 'is-disabled' : ''}`}
+                      disabled={isDisabled}
                       onClick={() => {
+                        if (isDisabled) return
                         setStartTime(slot.start)
                         // Sau khi chọn giờ, nhảy sang màn "Thông tin đặt khám".
                         setShowDoctorDetail(false)
@@ -420,45 +588,198 @@ export default function Appointment() {
         ) : null}
 
         {showBookingInfo ? (
-          <section className="appointment-booking-summary" aria-label="Thông tin đặt khám">
-            <div className="auth-card appointment-form-card">
-              <h2>Thông tin đặt khám</h2>
-              <p className="auth-card-sub">Đã chọn bác sĩ và khung giờ.</p>
+          <div className="appointment-step2-layout" aria-label="Đặt khám - bước 2">
+            <div className="appointment-step2-left">
+              <div className="appointment-stepper" aria-label="Các bước đặt khám">
+                <button
+                  type="button"
+                  className="appointment-stepper-item"
+                  onClick={handleBackToStep1}
+                  aria-label="Bước 1: Ngày và giờ khám (thu gọn)"
+                >
+                  <span className="appointment-stepper-circle" aria-hidden="true">
+                    1
+                  </span>
+                  <span className="appointment-stepper-label">Ngày và giờ khám</span>
+                  <span className="appointment-stepper-chevron" aria-hidden="true">
+                    ˅
+                  </span>
+                </button>
 
-              {selectedDoctor ? (
-                <div className="appointment-selected-doctor" aria-label="Bác sĩ đã chọn">
-                  <div className="appointment-selected-avatar" aria-hidden="true">
-                    {getDoctorInitials(selectedDoctor)}
-                  </div>
-                  <div className="appointment-selected-meta">
-                    <div className="appointment-selected-name">{getDoctorRankName(selectedDoctor)}</div>
-                    <div className="appointment-selected-spec">
-                      {selectedSpecialty || 'Chuyên khoa'}
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="appointment-summary-grid" role="list">
-                <div className="appointment-summary-row" role="listitem">
-                  <div className="appointment-summary-key">Ngày khám</div>
-                  <div className="appointment-summary-val">{appointmentDate}</div>
-                </div>
-                <div className="appointment-summary-row" role="listitem">
-                  <div className="appointment-summary-key">Khung giờ</div>
-                  <div className="appointment-summary-val">{startTime}</div>
+                <div className="appointment-stepper-item is-open" aria-current="step">
+                  <span className="appointment-stepper-circle" aria-hidden="true">
+                    2
+                  </span>
+                  <span className="appointment-stepper-label">Hồ sơ bệnh nhân</span>
+                  <span className="appointment-stepper-chevron" aria-hidden="true">
+                    ˄
+                  </span>
                 </div>
               </div>
 
-              <p className="appointment-summary-note">
-                Chức năng xác nhận đặt lịch sẽ được cập nhật ở bước tiếp theo.
-              </p>
+              <section className="appointment-patient-section" aria-label="Hồ sơ bệnh nhân">
+                <h2 className="appointment-patient-title">Hồ sơ bệnh nhân</h2>
 
-              <p className="auth-footer">
-                <Link to="/home">← Quay lại</Link>
-              </p>
+                <div className="appointment-patient-card">
+                  <div className="appointment-patient-card-header">
+                    <div className="appointment-patient-name">{patientDraft.fullName}</div>
+                    <button
+                      type="button"
+                      className="appointment-edit-btn"
+                      onClick={() => setEditingPatient((v) => !v)}
+                    >
+                      {editingPatient ? 'Hủy' : 'Điều chỉnh'}
+                    </button>
+                  </div>
+
+                  <div className="appointment-patient-grid" role="list">
+                    <div className="appointment-patient-row" role="listitem">
+                      <div className="appointment-patient-key">Mã bệnh nhân</div>
+                      <div className="appointment-patient-val">
+                        {editingPatient ? (
+                          <input
+                            value={patientDraft.code}
+                            onChange={(e) => setPatientDraft((d) => ({ ...d, code: e.target.value }))}
+                          />
+                        ) : (
+                          patientDraft.code
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="appointment-patient-row" role="listitem">
+                      <div className="appointment-patient-key">Họ và tên</div>
+                      <div className="appointment-patient-val">
+                        {editingPatient ? (
+                          <input
+                            value={patientDraft.fullName}
+                            onChange={(e) => setPatientDraft((d) => ({ ...d, fullName: e.target.value }))}
+                          />
+                        ) : (
+                          patientDraft.fullName
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="appointment-patient-row" role="listitem">
+                      <div className="appointment-patient-key">Giới tính</div>
+                      <div className="appointment-patient-val">
+                        {editingPatient ? (
+                          <select
+                            value={patientDraft.gender}
+                            onChange={(e) => setPatientDraft((d) => ({ ...d, gender: e.target.value }))}
+                          >
+                            <option value="Nam">Nam</option>
+                            <option value="Nữ">Nữ</option>
+                          </select>
+                        ) : (
+                          patientDraft.gender
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="appointment-patient-row" role="listitem">
+                      <div className="appointment-patient-key">Ngày sinh</div>
+                      <div className="appointment-patient-val">
+                        {editingPatient ? (
+                          <input
+                            value={patientDraft.dob}
+                            onChange={(e) => setPatientDraft((d) => ({ ...d, dob: e.target.value }))}
+                          />
+                        ) : (
+                          patientDraft.dob
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="appointment-patient-row" role="listitem">
+                      <div className="appointment-patient-key">Số điện thoại</div>
+                      <div className="appointment-patient-val">
+                        {editingPatient ? (
+                          <input
+                            value={patientDraft.phone}
+                            onChange={(e) => setPatientDraft((d) => ({ ...d, phone: e.target.value }))}
+                          />
+                        ) : (
+                          patientDraft.phone
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="auth-field" style={{ marginTop: '14px' }}>
+                  <label htmlFor="patient-note">Thông tin bổ sung (không bắt buộc)</label>
+                  <textarea
+                    id="patient-note"
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Ví dụ: đau họng 3 ngày, đã uống thuốc..."
+                  />
+                </div>
+              </section>
             </div>
-          </section>
+
+            <aside className="appointment-step2-right" aria-label="Thông tin đặt khám">
+              <div className="auth-card appointment-form-card appointment-summary-card">
+                <div className="appointment-summary-card-head">
+                  <h2>Thông tin đặt khám</h2>
+                  <button type="button" className="appointment-back-btn" onClick={handleBackToStep1}>
+                    ← Chọn lại giờ
+                  </button>
+                </div>
+
+                {selectedDoctor ? (
+                  <div className="appointment-selected-doctor" aria-label="Bác sĩ đã chọn">
+                    <div className="appointment-selected-avatar" aria-hidden="true">
+                      {getDoctorInitials(selectedDoctor)}
+                    </div>
+                    <div className="appointment-selected-meta">
+                      <div className="appointment-selected-name">{getDoctorRankName(selectedDoctor)}</div>
+                      <div className="appointment-selected-spec">{selectedSpecialty || 'Chuyên khoa'}</div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="appointment-summary-grid" role="list">
+                  <div className="appointment-summary-row" role="listitem">
+                    <div className="appointment-summary-key">Ngày khám</div>
+                    <div className="appointment-summary-val">{appointmentDate}</div>
+                  </div>
+                  <div className="appointment-summary-row" role="listitem">
+                    <div className="appointment-summary-key">Khung giờ</div>
+                    <div className="appointment-summary-val">
+                      {startTime}-{addMinutesToHHmm(startTime, 12)}
+                    </div>
+                  </div>
+                  <div className="appointment-summary-row" role="listitem">
+                    <div className="appointment-summary-key">Bệnh nhân</div>
+                    <div className="appointment-summary-val">{patientDraft.fullName}</div>
+                  </div>
+                </div>
+
+                {bookingError ? (
+                  <p className="auth-error" role="alert" style={{ marginTop: '14px' }}>
+                    {bookingError}
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  className="auth-submit"
+                  onClick={handleConfirmBooking}
+                  disabled={bookingLoading}
+                  style={{ marginTop: '14px' }}
+                >
+                  {bookingLoading ? 'Đang đặt…' : 'Đặt lịch'}
+                </button>
+
+                <p className="auth-footer">
+                  <Link to="/home">← Quay lại</Link>
+                </p>
+              </div>
+            </aside>
+          </div>
         ) : null}
       </div>
     </div>
