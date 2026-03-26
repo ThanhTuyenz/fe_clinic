@@ -95,6 +95,15 @@
   color: #fff !important;
 }
 
+/* Chỉ để phần text chào mừng trong header */
+.landing-greet {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  white-space: nowrap;
+  user-select: none;
+}
+
 /* Đảm bảo Link không bị override bởi rule `a { ... }` hoặc `:visited` */
 .landing-btn--solid:visited,
 .landing-btn--solid:active,
@@ -227,4 +236,72 @@
 
 .landing-footer a {
   color: var(--clinic-primary);
+}
+
+/* Dropdown menu người dùng (chỉ hiện khi hover vào "Xin chào") */
+.landing-user-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.landing-user-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 160px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+
+  padding: 0.35rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(248, 250, 252, 0.96);
+  backdrop-filter: blur(8px);
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+  z-index: 50;
+}
+
+.landing-user-wrap:hover .landing-user-menu,
+.landing-user-wrap:focus .landing-user-menu,
+.landing-user-wrap:focus-within .landing-user-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.landing-user-menu-item {
+  appearance: none;
+  border: none;
+  background: transparent;
+
+  display: block;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-heading);
+  text-decoration: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.landing-user-menu-item:hover {
+  background: var(--clinic-primary-soft);
+  color: var(--clinic-primary-dark);
+}
+
+.landing-user-menu-item:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
 }

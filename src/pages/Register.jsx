@@ -286,7 +286,7 @@ export default function Register() {
           )}
 
           <p className="auth-footer">
-            <Link to="/">Về trang chủ</Link>
+            <Link to="/landing">Về trang chủ</Link>
             {' · '}
             Đã có tài khoản? <Link to="/login">Đăng nhập</Link>
           </p>
