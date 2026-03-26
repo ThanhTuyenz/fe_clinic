@@ -64,7 +64,7 @@ export default function Login() {
       <aside className="auth-brand" aria-hidden="false">
         <div className="auth-brand-inner">
           <span className="auth-brand-badge">Hệ thống quản lý</span>
-          <h1>Phòng khám ABC</h1>
+          <h1>VitaCare Clinic</h1>
           <p>
             Quản lý quy trình khám chữa bệnh và đặt lịch khám — an toàn, rõ ràng,
             thuận tiện cho nhân viên và bệnh nhân.

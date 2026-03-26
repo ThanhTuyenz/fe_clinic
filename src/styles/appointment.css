@@ -1,12 +1,13 @@
 .appointment-page {
   min-height: 100vh;
-  padding: 24px 0 60px;
+  padding: 0 0 60px;
   background: #fff;
 }
 
 .appointment-container {
   width: min(1180px, 92%);
   margin: 0 auto;
+  padding-top: 24px;
 }
 
 .appointment-topbar {
@@ -727,6 +728,121 @@
   background: rgba(13, 148, 136, 0.1);
 }
 
+.appointment-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 50;
+}
+
+.appointment-modal {
+  width: min(920px, 96vw);
+  max-height: min(86vh, 820px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.35);
+  padding: 16px 18px 18px;
+}
+
+.appointment-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  margin-bottom: 14px;
+}
+
+.appointment-modal-title {
+  font-weight: 950;
+  color: var(--text-heading);
+  font-size: 1.05rem;
+}
+
+.appointment-modal-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text-heading);
+}
+
+.appointment-modal-close:hover {
+  border-color: rgba(13, 148, 136, 0.45);
+  background: rgba(13, 148, 136, 0.04);
+}
+
+.appointment-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 14px;
+}
+
+.appointment-radio-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 0.35rem 0;
+}
+
+.appointment-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.appointment-radio input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--clinic-primary);
+}
+
+.appointment-required {
+  color: rgba(220, 38, 38, 0.95);
+  font-weight: 950;
+}
+
+.appointment-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.appointment-modal-save {
+  padding: 0.75rem 1.1rem;
+  border-radius: 10px;
+  border: none;
+  background: var(--clinic-primary);
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.05s;
+}
+
+.appointment-modal-save:hover {
+  background: var(--clinic-primary-dark);
+}
+
+.appointment-modal-save:active {
+  transform: scale(0.99);
+}
+
 .appointment-patient-grid {
   display: grid;
   gap: 10px;
@@ -765,6 +881,16 @@
   outline: none;
   border-color: var(--clinic-primary);
   box-shadow: 0 0 0 3px var(--clinic-primary-soft);
+}
+
+/* Mã bệnh nhân: chỉ đọc, không phải ô nhập */
+.appointment-patient-code {
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.04);
+  border: 1px solid var(--border);
+  cursor: default;
+  user-select: text;
 }
 
 .appointment-step2-right .auth-card {
@@ -846,6 +972,14 @@
   .appointment-patient-row {
     grid-template-columns: 1fr;
     align-items: start;
+  }
+
+  .appointment-modal {
+    padding: 14px 14px 16px;
+  }
+
+  .appointment-modal-grid {
+    grid-template-columns: 1fr;
   }
 }
 

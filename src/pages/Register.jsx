@@ -116,7 +116,7 @@ export default function Register() {
       <aside className="auth-brand" aria-hidden="false">
         <div className="auth-brand-inner">
           <span className="auth-brand-badge">Tài khoản bệnh nhân</span>
-          <h1>Tham gia Phòng khám ABC</h1>
+          <h1>Tham gia VitaCare Clinic</h1>
           <p>
             {step === 1
               ? 'Tạo tài khoản để đặt lịch khám trực tuyến và theo dõi lịch hẹn của bạn mọi lúc.'

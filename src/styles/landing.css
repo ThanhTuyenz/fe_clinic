@@ -13,12 +13,14 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding: 0.85rem 1.5rem;
+  padding: 1.15rem 1.5rem;
+  min-height: 84px;
   max-width: 1120px;
   margin: 0 auto;
   background: rgba(248, 250, 252, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
+  overflow: visible; /* allow oversized logo to spill */
 }
 
 .landing-brand {
@@ -26,11 +28,22 @@
   font-size: 1.1rem;
   color: var(--text-heading);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .landing-brand:hover {
   text-decoration: none;
   color: var(--clinic-primary-dark);
+}
+
+.landing-logo {
+  height: 110px; /* visually larger */
+  width: auto;
+  display: block;
+  object-fit: contain;
+  margin: -18px 0; /* keep header height unchanged */
 }
 
 .landing-nav {
@@ -118,8 +131,36 @@
 }
 
 .landing-hero {
-  padding: 2.5rem 0 2rem;
+  position: relative;
+  padding: 3.25rem 1.25rem 2.75rem;
   text-align: center;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.75);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+
+  /* Use the provided banner image (build output path) */
+  background-image: url('/dist/assets/Banner.jpg');
+  background-size: cover;
+  background-position: center;
+}
+
+.landing-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(240, 253, 250, 0.30) 0%,
+    rgba(236, 254, 255, 0.34) 55%,
+    rgba(248, 250, 252, 0.38) 100%
+  );
+  pointer-events: none;
+}
+
+.landing-hero > * {
+  position: relative;
+  z-index: 1;
 }
 
 .landing-hero h1 {
@@ -129,6 +170,7 @@
   color: var(--text-heading);
   letter-spacing: -0.02em;
   line-height: 1.2;
+  text-shadow: 0 2px 14px rgba(255, 255, 255, 0.65), 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
 .landing-hero p {
@@ -137,6 +179,7 @@
   font-size: 1.05rem;
   color: var(--muted);
   line-height: 1.6;
+  text-shadow: 0 2px 14px rgba(255, 255, 255, 0.75);
 }
 
 .landing-hero-cta {
@@ -144,6 +187,143 @@
   gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+.landing-booking {
+  margin-top: 1.6rem;
+}
+
+.landing-booking-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.landing-booking-head h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 950;
+  color: var(--text-heading);
+  line-height: 1.2;
+}
+
+.landing-booking-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.landing-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(2, 132, 199, 0.08);
+  color: rgba(2, 132, 199, 0.95);
+  font-weight: 900;
+  text-decoration: none;
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  white-space: nowrap;
+}
+
+.landing-more:hover {
+  background: rgba(2, 132, 199, 0.12);
+  text-decoration: none;
+}
+
+.landing-doctor-strip {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 10px 2px 14px;
+  scroll-snap-type: x mandatory;
+}
+
+.landing-doctor-strip::-webkit-scrollbar {
+  height: 10px;
+}
+
+.landing-doctor-strip::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.14);
+  border-radius: 999px;
+}
+
+.landing-doctor-card {
+  flex: 0 0 auto;
+  width: 260px;
+  scroll-snap-align: start;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  box-shadow: 0 12px 30px rgba(2, 132, 199, 0.06);
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-doctor-card.is-skeleton {
+  pointer-events: none;
+}
+
+.landing-doctor-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.10);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  color: var(--clinic-primary-dark);
+  font-weight: 950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  margin: 2px auto 10px;
+}
+
+.landing-doctor-name {
+  text-align: center;
+  font-weight: 950;
+  color: var(--text-heading);
+  font-size: 0.98rem;
+  line-height: 1.25;
+  min-height: 2.5em;
+}
+
+.landing-doctor-meta {
+  margin-top: 8px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 750;
+  font-size: 0.9rem;
+}
+
+.landing-doctor-spec {
+  font-weight: 800;
+}
+
+.landing-doctor-hospital {
+  margin-top: 4px;
+  font-size: 0.86rem;
+}
+
+.landing-doctor-action {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-heading);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.landing-doctor-action:hover {
+  color: var(--clinic-primary-dark);
+  text-decoration: none;
 }
 
 .landing-section {
@@ -162,6 +342,95 @@
   margin: 0 0 0.75rem;
   line-height: 1.65;
   max-width: 48rem;
+}
+
+.landing-expert {
+  padding-top: 6px;
+}
+
+.landing-expert-head {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.landing-expert-head h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 950;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.landing-expert-line {
+  width: 46px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.55);
+}
+
+.landing-expert-sub {
+  margin-top: 10px;
+  color: var(--muted);
+  font-weight: 700;
+  max-width: none;
+}
+
+.landing-expert-grid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.landing-expert-card {
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 10px;
+  padding: 14px 12px 12px;
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.04);
+  text-align: center;
+}
+
+.landing-expert-num {
+  font-size: 1.9rem;
+  font-weight: 950;
+  color: var(--text-heading);
+  line-height: 1;
+}
+
+.landing-expert-label {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.landing-expert-cta {
+  margin-top: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.landing-expert-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 10px;
+  background: rgba(2, 132, 199, 0.95);
+  color: #fff;
+  font-weight: 950;
+  text-decoration: none;
+  letter-spacing: 0.02em;
+  box-shadow: 0 16px 40px rgba(2, 132, 199, 0.22);
+}
+
+.landing-expert-btn:hover {
+  text-decoration: none;
+  background: rgba(3, 105, 161, 0.98);
 }
 
 .landing-cards {
@@ -201,6 +470,17 @@
 @media (min-width: 640px) {
   .landing-info-grid {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-booking-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .landing-expert-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

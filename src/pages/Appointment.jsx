@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { listDoctors } from '../api/doctors.js'
 import { createAppointment } from '../api/appointments.js'
 import '../styles/auth.css'
 import '../styles/appointment.css'
+import '../styles/landing.css'
 
 function safeParse(json) {
   try {
@@ -115,7 +116,9 @@ function simpleSeedFromIso(iso) {
 
 export default function Appointment() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { token, user } = useMemo(() => getSession(), [])
+  const requestedDoctorId = location.state?.doctorId
 
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
@@ -156,12 +159,27 @@ export default function Appointment() {
     },
   ])
   const selectedPatient = patients[0] || null
-  const [editingPatient, setEditingPatient] = useState(false)
   const [patientDraft, setPatientDraft] = useState(() =>
     patients[0]
       ? { ...patients[0] }
       : { id: '', code: '', fullName: '', gender: '', dob: '', phone: '' },
   )
+  const [patientModalOpen, setPatientModalOpen] = useState(false)
+  const [patientModalDraft, setPatientModalDraft] = useState(() => ({
+    fullName: patients[0]?.fullName || '',
+    phone: patients[0]?.phone || '',
+    dob: patients[0]?.dob || '',
+    gender: patients[0]?.gender || 'Nam',
+    province: '',
+    district: '',
+    ward: '',
+    addressLine: '',
+    idCard: '',
+    ethnicity: 'Kinh',
+    occupation: '',
+    insuranceNo: '',
+    email: '',
+  }))
   
   const scheduleRef = useRef(null)
   const dateStripRef = useRef(null)
@@ -174,12 +192,20 @@ export default function Appointment() {
     listDoctors()
       .then((docs) => {
         setDoctors(docs)
-        setDoctorId((prev) => prev || (docs[0] ? docs[0].id : ''))
+        const resolvedId =
+          requestedDoctorId && docs?.some((d) => d?.id === requestedDoctorId)
+            ? requestedDoctorId
+            : docs[0]
+              ? docs[0].id
+              : ''
+        setDoctorId(resolvedId)
+        setShowDoctorDetail(Boolean(requestedDoctorId))
+        setShowBookingInfo(false)
         setDoctorLoadError('')
       })
       .catch((err) => setDoctorLoadError(err.message || 'Không tải được bác sĩ.'))
       .finally(() => setLoadingDoctors(false))
-  }, [token, user, navigate])
+  }, [token, user, navigate, requestedDoctorId])
 
   function handleOpenDoctorDetail(nextId) {
     setDoctorId(nextId)
@@ -290,8 +316,18 @@ export default function Appointment() {
   useEffect(() => {
     if (!selectedPatient) return
     setPatientDraft({ ...selectedPatient })
-    setEditingPatient(false)
   }, [selectedPatient])
+
+  useEffect(() => {
+    if (!patientModalOpen) return
+    setPatientModalDraft((d) => ({
+      ...d,
+      fullName: patientDraft.fullName || '',
+      phone: patientDraft.phone || '',
+      dob: patientDraft.dob || '',
+      gender: patientDraft.gender || 'Nam',
+    }))
+  }, [patientModalOpen, patientDraft])
 
   function handleBackToStep1() {
     setBookingError('')
@@ -324,6 +360,21 @@ export default function Appointment() {
     }
   }
 
+  function closePatientModal() {
+    setPatientModalOpen(false)
+  }
+
+  function savePatientModal() {
+    setPatientDraft((p) => ({
+      ...p,
+      fullName: patientModalDraft.fullName.trim() || p.fullName,
+      phone: patientModalDraft.phone.trim() || p.phone,
+      dob: patientModalDraft.dob.trim() || p.dob,
+      gender: patientModalDraft.gender || p.gender,
+    }))
+    setPatientModalOpen(false)
+  }
+
   function scrollDateStrip(direction) {
     const el = dateStripRef.current
     if (!el) return
@@ -333,6 +384,59 @@ export default function Appointment() {
 
   return (
     <div className="appointment-page">
+      <header className="landing-header">
+        <Link className="landing-brand" to="/landing">
+          <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
+        </Link>
+        <nav className="landing-nav" aria-label="Điều hướng chính">
+          <Link to="/landing#gioi-thieu">Giới thiệu</Link>
+          <Link to="/landing#dich-vu">Dịch vụ</Link>
+          <Link to="/landing#gio-lam-viec">Giờ làm việc</Link>
+          <Link to="/landing#lien-he">Liên hệ</Link>
+          <span className="landing-nav-actions">
+            {user ? (
+              <>
+                <span className="landing-user-wrap" tabIndex={0}>
+                  <span className="landing-greet">
+                    Xin chào, {user.displayName || user.fullName || user.email}
+                  </span>
+                  <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
+                    <Link className="landing-user-menu-item" to="/appointments" role="menuitem">
+                      Lịch khám
+                    </Link>
+                    <Link className="landing-user-menu-item" to="/home" role="menuitem">
+                      Thông tin
+                    </Link>
+                    <button
+                      type="button"
+                      className="landing-user-menu-item landing-user-menu-logout"
+                      onClick={() => {
+                        localStorage.removeItem('token')
+                        localStorage.removeItem('user')
+                        sessionStorage.removeItem('token')
+                        sessionStorage.removeItem('user')
+                        navigate('/landing', { replace: true })
+                      }}
+                      role="menuitem"
+                    >
+                      Đăng xuất
+                    </button>
+                  </span>
+                </span>
+              </>
+            ) : (
+              <>
+                <Link className="landing-btn landing-btn--ghost" to="/login">
+                  Đăng nhập
+                </Link>
+                <Link className="landing-btn landing-btn--solid" to="/register">
+                  Đăng ký
+                </Link>
+              </>
+            )}
+          </span>
+        </nav>
+      </header>
       <div className="appointment-container">
         {showDoctorDetail && selectedDoctor ? (
           <>
@@ -626,84 +730,41 @@ export default function Appointment() {
                     <button
                       type="button"
                       className="appointment-edit-btn"
-                      onClick={() => setEditingPatient((v) => !v)}
+                      onClick={() => setPatientModalOpen(true)}
                     >
-                      {editingPatient ? 'Hủy' : 'Điều chỉnh'}
+                      Điều chỉnh
                     </button>
                   </div>
 
                   <div className="appointment-patient-grid" role="list">
                     <div className="appointment-patient-row" role="listitem">
                       <div className="appointment-patient-key">Mã bệnh nhân</div>
-                      <div className="appointment-patient-val">
-                        {editingPatient ? (
-                          <input
-                            value={patientDraft.code}
-                            onChange={(e) => setPatientDraft((d) => ({ ...d, code: e.target.value }))}
-                          />
-                        ) : (
-                          patientDraft.code
-                        )}
+                      <div
+                        className="appointment-patient-val appointment-patient-code"
+                        title="Mã do hệ thống cấp, không thể chỉnh sửa"
+                      >
+                        {selectedPatient?.code || patientDraft.code}
                       </div>
                     </div>
 
                     <div className="appointment-patient-row" role="listitem">
                       <div className="appointment-patient-key">Họ và tên</div>
-                      <div className="appointment-patient-val">
-                        {editingPatient ? (
-                          <input
-                            value={patientDraft.fullName}
-                            onChange={(e) => setPatientDraft((d) => ({ ...d, fullName: e.target.value }))}
-                          />
-                        ) : (
-                          patientDraft.fullName
-                        )}
-                      </div>
+                      <div className="appointment-patient-val">{patientDraft.fullName}</div>
                     </div>
 
                     <div className="appointment-patient-row" role="listitem">
                       <div className="appointment-patient-key">Giới tính</div>
-                      <div className="appointment-patient-val">
-                        {editingPatient ? (
-                          <select
-                            value={patientDraft.gender}
-                            onChange={(e) => setPatientDraft((d) => ({ ...d, gender: e.target.value }))}
-                          >
-                            <option value="Nam">Nam</option>
-                            <option value="Nữ">Nữ</option>
-                          </select>
-                        ) : (
-                          patientDraft.gender
-                        )}
-                      </div>
+                      <div className="appointment-patient-val">{patientDraft.gender}</div>
                     </div>
 
                     <div className="appointment-patient-row" role="listitem">
                       <div className="appointment-patient-key">Ngày sinh</div>
-                      <div className="appointment-patient-val">
-                        {editingPatient ? (
-                          <input
-                            value={patientDraft.dob}
-                            onChange={(e) => setPatientDraft((d) => ({ ...d, dob: e.target.value }))}
-                          />
-                        ) : (
-                          patientDraft.dob
-                        )}
-                      </div>
+                      <div className="appointment-patient-val">{patientDraft.dob}</div>
                     </div>
 
                     <div className="appointment-patient-row" role="listitem">
                       <div className="appointment-patient-key">Số điện thoại</div>
-                      <div className="appointment-patient-val">
-                        {editingPatient ? (
-                          <input
-                            value={patientDraft.phone}
-                            onChange={(e) => setPatientDraft((d) => ({ ...d, phone: e.target.value }))}
-                          />
-                        ) : (
-                          patientDraft.phone
-                        )}
-                      </div>
+                      <div className="appointment-patient-val">{patientDraft.phone}</div>
                     </div>
                   </div>
                 </div>
@@ -718,6 +779,195 @@ export default function Appointment() {
                   />
                 </div>
               </section>
+
+              {patientModalOpen ? (
+                <div
+                  className="appointment-modal-overlay"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Chỉnh sửa hồ sơ"
+                  onMouseDown={(e) => {
+                    if (e.target === e.currentTarget) closePatientModal()
+                  }}
+                >
+                  <div className="appointment-modal">
+                    <div className="appointment-modal-head">
+                      <div className="appointment-modal-title">Chỉnh sửa hồ sơ</div>
+                      <button type="button" className="appointment-modal-close" onClick={closePatientModal} aria-label="Đóng">
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="appointment-modal-grid">
+                      <div className="auth-field">
+                        <label htmlFor="pm-name">
+                          Họ và tên <span className="appointment-required">*</span>
+                        </label>
+                        <input
+                          id="pm-name"
+                          value={patientModalDraft.fullName}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, fullName: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-phone">
+                          Số điện thoại <span className="appointment-required">*</span>
+                        </label>
+                        <input
+                          id="pm-phone"
+                          value={patientModalDraft.phone}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, phone: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-dob">
+                          Ngày sinh <span className="appointment-required">*</span>
+                        </label>
+                        <input
+                          id="pm-dob"
+                          value={patientModalDraft.dob}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, dob: e.target.value }))}
+                          placeholder="dd/mm/yyyy"
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label>
+                          Giới tính <span className="appointment-required">*</span>
+                        </label>
+                        <div className="appointment-radio-row">
+                          <label className="appointment-radio">
+                            <input
+                              type="radio"
+                              name="pm-gender"
+                              checked={patientModalDraft.gender === 'Nam'}
+                              onChange={() => setPatientModalDraft((d) => ({ ...d, gender: 'Nam' }))}
+                            />
+                            Nam
+                          </label>
+                          <label className="appointment-radio">
+                            <input
+                              type="radio"
+                              name="pm-gender"
+                              checked={patientModalDraft.gender === 'Nữ'}
+                              onChange={() => setPatientModalDraft((d) => ({ ...d, gender: 'Nữ' }))}
+                            />
+                            Nữ
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-province">Tỉnh / Thành phố</label>
+                        <select
+                          id="pm-province"
+                          value={patientModalDraft.province}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, province: e.target.value }))}
+                        >
+                          <option value="">Chọn Tỉnh / Thành phố</option>
+                          <option value="TP.HCM">TP. Hồ Chí Minh</option>
+                          <option value="Hà Nội">Hà Nội</option>
+                        </select>
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-district">Quận / Huyện</label>
+                        <select
+                          id="pm-district"
+                          value={patientModalDraft.district}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, district: e.target.value }))}
+                        >
+                          <option value="">Chọn Quận / Huyện</option>
+                        </select>
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-ward">Phường / Xã</label>
+                        <select
+                          id="pm-ward"
+                          value={patientModalDraft.ward}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, ward: e.target.value }))}
+                        >
+                          <option value="">Chọn Phường / Xã</option>
+                        </select>
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-address">
+                          Địa chỉ cụ thể <span className="appointment-required">*</span>
+                        </label>
+                        <input
+                          id="pm-address"
+                          value={patientModalDraft.addressLine}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, addressLine: e.target.value }))}
+                          placeholder="Số nhà, tên đường"
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-idcard">Số CMND/CCCD</label>
+                        <input
+                          id="pm-idcard"
+                          value={patientModalDraft.idCard}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, idCard: e.target.value }))}
+                          placeholder="Số CMND/CCCD"
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-ethnicity">Dân tộc</label>
+                        <select
+                          id="pm-ethnicity"
+                          value={patientModalDraft.ethnicity}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, ethnicity: e.target.value }))}
+                        >
+                          <option value="Kinh">Kinh</option>
+                          <option value="Tày">Tày</option>
+                          <option value="Thái">Thái</option>
+                        </select>
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-occupation">Nghề nghiệp</label>
+                        <input
+                          id="pm-occupation"
+                          value={patientModalDraft.occupation}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, occupation: e.target.value }))}
+                          placeholder="Chọn dân tộc"
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-insurance">Mã thẻ BHYT</label>
+                        <input
+                          id="pm-insurance"
+                          value={patientModalDraft.insuranceNo}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, insuranceNo: e.target.value }))}
+                          placeholder="Mã số trên thẻ Bảo hiểm y tế"
+                        />
+                      </div>
+
+                      <div className="auth-field">
+                        <label htmlFor="pm-email">Email</label>
+                        <input
+                          id="pm-email"
+                          value={patientModalDraft.email}
+                          onChange={(e) => setPatientModalDraft((d) => ({ ...d, email: e.target.value }))}
+                          placeholder="Địa chỉ email của bạn"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="appointment-modal-actions">
+                      <button type="button" className="appointment-modal-save" onClick={savePatientModal}>
+                        Lưu chỉnh sửa
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <aside className="appointment-step2-right" aria-label="Thông tin đặt khám">
