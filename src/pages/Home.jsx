@@ -4,7 +4,10 @@ import { listDoctors } from '../api/doctors.js'
 import '../styles/landing.css'
 
 function getDoctorFullName(d) {
-  return d?.displayName || `${d?.lastName || ''} ${d?.firstName || ''}`.trim() || d?.email || ''
+  const first = String(d?.firstName || '').trim()
+  const last = String(d?.lastName || '').trim()
+  const full = `${first} ${last}`.trim()
+  return full || String(d?.displayName || '').trim() || d?.email || ''
 }
 
 function parseDoctorBio(bio) {
@@ -49,6 +52,27 @@ function getDoctorInitials(d) {
 
 function parseDoctorSpecialty(bio) {
   return parseDoctorBio(bio).specialty || ''
+}
+
+function getDoctorCardSpecialty(d) {
+  const s = String(d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
+  if (!s) return 'Chuyên khoa'
+  if (s.length > 40 || /kinh nghiệm/i.test(s)) return 'Chuyên khoa'
+  return s
+}
+
+function getDoctorCardExperience(d) {
+  const years = Number(d?.experienceYears ?? d?.yearsOfExperience ?? d?.experience ?? d?.expYears)
+  if (Number.isFinite(years) && years > 0) return `${years} năm kinh nghiệm`
+  return '—'
+}
+
+function normalizeAvatarUrl(url) {
+  const s = String(url || '').trim()
+  if (!s) return ''
+  // upanhlaylink often provides /view/ page; /img/ is the direct file path
+  if (s.includes('sf-static.upanhlaylink.com/view/')) return s.replace('/view/', '/img/')
+  return s
 }
 
 export default function Landing() {
@@ -237,12 +261,23 @@ export default function Landing() {
                       }}
                     >
                       <div className="landing-doctor-avatar" aria-hidden="true">
-                        {getDoctorInitials(d)}
+                        <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
+                        {normalizeAvatarUrl(d?.avatarUrl || d?.imageUrl || d?.photoUrl) ? (
+                          <img
+                            className="landing-avatar-img"
+                            src={normalizeAvatarUrl(d.avatarUrl || d.imageUrl || d.photoUrl)}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        ) : null}
                       </div>
                       <div className="landing-doctor-name">{getDoctorRankName(d)}</div>
                       <div className="landing-doctor-meta">
-                        <div className="landing-doctor-spec">{parseDoctorSpecialty(d.bio) || 'Chuyên khoa'}</div>
-                        <div className="landing-doctor-hospital">—</div>
+                        <div className="landing-doctor-spec">{getDoctorCardSpecialty(d)}</div>
+                        <div className="landing-doctor-hospital">{getDoctorCardExperience(d)}</div>
                       </div>
                       <Link
                         className="landing-doctor-action"
