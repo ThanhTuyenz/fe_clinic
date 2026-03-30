@@ -55,7 +55,7 @@ function parseDoctorSpecialty(bio) {
 }
 
 function getDoctorCardSpecialty(d) {
-  const s = String(d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
+  const s = String(d?.specialtyName || d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
   if (!s) return 'Chuyên khoa'
   if (s.length > 40 || /kinh nghiệm/i.test(s)) return 'Chuyên khoa'
   return s
@@ -73,6 +73,20 @@ function normalizeAvatarUrl(url) {
   // upanhlaylink often provides /view/ page; /img/ is the direct file path
   if (s.includes('sf-static.upanhlaylink.com/view/')) return s.replace('/view/', '/img/')
   return s
+}
+
+function getDoctorAvatarSrc(d) {
+  const candidate =
+    d?.avatarUrl ??
+    d?.avatarURL ??
+    d?.avatar ??
+    d?.avatar_url ??
+    d?.imageUrl ??
+    d?.image_url ??
+    d?.photoUrl ??
+    d?.photo_url ??
+    ''
+  return normalizeAvatarUrl(candidate)
 }
 
 export default function Landing() {
@@ -262,10 +276,10 @@ export default function Landing() {
                     >
                       <div className="landing-doctor-avatar" aria-hidden="true">
                         <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
-                        {normalizeAvatarUrl(d?.avatarUrl || d?.imageUrl || d?.photoUrl) ? (
+                        {getDoctorAvatarSrc(d) ? (
                           <img
                             className="landing-avatar-img"
-                            src={normalizeAvatarUrl(d.avatarUrl || d.imageUrl || d.photoUrl)}
+                            src={getDoctorAvatarSrc(d)}
                             alt=""
                             loading="lazy"
                             onError={(e) => {

@@ -13,7 +13,17 @@
   flex-direction: column;
   justify-content: center;
   color: #fff;
-  background: linear-gradient(160deg, #0d9488 0%, #0f766e 42%, #115e59 100%);
+  /* Nền ảnh phía bên trái (dùng chung cho Login/Register) */
+  background:
+    linear-gradient(
+      160deg,
+      rgba(13, 148, 136, 0.95) 0%,
+      rgba(15, 118, 110, 0.82) 42%,
+      rgba(17, 94, 89, 0.7) 100%
+    ),
+    url('../assets/br1.png');
+  background-size: cover;
+  background-position: left center;
   position: relative;
   overflow: hidden;
 }

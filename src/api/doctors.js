@@ -2,11 +2,24 @@ const base =
   (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
   'http://localhost:5000'
 
+const DEFAULT_DOCTOR_AVATAR =
+  'https://sf-static.upanhlaylink.com/img/image_202603269925437b540c48178c53b73c88dd8146.jpg'
+
 function deriveExperienceYears(doctor) {
   if (!doctor) return null
-  const direct =
-    doctor.experienceYears ?? doctor.yearsOfExperience ?? doctor.experience ?? doctor.expYears ?? null
-  if (Number.isFinite(Number(direct))) return Number(direct)
+  const directCandidate =
+    doctor.experienceYears ??
+    doctor.yearsOfExperience ??
+    doctor.years ??
+    doctor.experience ??
+    doctor.expYears ??
+    null
+
+  if (directCandidate !== null && directCandidate !== undefined && directCandidate !== '') {
+    // Support cases like: "15", 15, "15 năm"
+    const extracted = Number(String(directCandidate).replace(/[^\d.]/g, ''))
+    if (Number.isFinite(extracted) && extracted > 0) return extracted
+  }
 
   const bio = String(doctor.bio || '')
   // Matches: "hơn 20 năm kinh nghiệm", "trên 15 năm kinh nghiệm", "kinh nghiệm 12 năm"
@@ -35,6 +48,7 @@ function injectExperienceIntoBio(doctor) {
 
 function deriveSpecialty(doctor) {
   if (!doctor) return ''
+  if (doctor.specialtyName) return String(doctor.specialtyName).trim()
   if (doctor.specialty) return String(doctor.specialty).trim()
   const bio = String(doctor.bio || '').trim()
   if (!bio) return ''
@@ -53,7 +67,23 @@ function deriveSpecialty(doctor) {
 function normalizeDoctor(doctor) {
   const d = injectExperienceIntoBio(doctor)
   const specialty = deriveSpecialty(d)
-  return specialty ? { ...d, specialty } : d
+  const normalized = specialty ? { ...d, specialty } : d
+
+  // Backend hiện tại chưa trả avatar; fallback bằng ảnh mặc định để UI luôn hiển thị.
+  const hasAvatar =
+    normalized.avatarUrl ||
+    normalized.avatarURL ||
+    normalized.avatar ||
+    normalized.avatar_url ||
+    normalized.imageUrl ||
+    normalized.image_url ||
+    normalized.photoUrl ||
+    normalized.photo_url
+
+  if (!hasAvatar) {
+    return { ...normalized, avatarUrl: DEFAULT_DOCTOR_AVATAR }
+  }
+  return normalized
 }
 
 function createBioLikeSample({ titleName, years, specialty, hospital, extra }) {
@@ -67,8 +97,7 @@ function createBioLikeSample({ titleName, years, specialty, hospital, extra }) {
 
 function buildExtraDoctors(existing) {
   const usedIds = new Set((existing || []).map((d) => d?.id).filter(Boolean))
-  const defaultAvatar =
-    'https://sf-static.upanhlaylink.com/img/image_202603269925437b540c48178c53b73c88dd8146.jpg'
+  const defaultAvatar = DEFAULT_DOCTOR_AVATAR
   const extras = [
     {
       id: 'demo-doc-01',
