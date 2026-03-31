@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listMyAppointments } from '../api/appointments.js'
-import logo from '../assets/react.svg'
+import logo from '../assets/logo.png'
 import '../styles/landing.css'
 import '../styles/my-appointments.css'
 
@@ -34,7 +34,12 @@ function getDoctorName(doc) {
   const first = String(doc?.firstName || '').trim()
   const last = String(doc?.lastName || '').trim()
   const full = `${first} ${last}`.trim()
-  return full || String(doc?.displayName || '').trim() || doc?.email || '—'
+  return (
+    full ||
+    String(doc?.displayName || doc?.fullName || '').trim() ||
+    doc?.email ||
+    '—'
+  )
 }
 
 function statusLabel(status) {
@@ -148,9 +153,13 @@ export default function MyAppointments() {
           <section className="myappt-list" aria-label="Danh sách lịch khám">
             {items.map((a) => {
               const st = statusLabel(a.status)
-              const doctor = a.doctor
-              const dept = String(doctor?.deptName || '').trim()
-              const spec = String(doctor?.specialtyName || doctor?.specialty || '').trim()
+              const doctor = a?.doctor ?? a?.doctorId ?? null
+              const dept = String(
+                doctor?.deptName || doctor?.dept || doctor?.departmentName || '',
+              ).trim()
+              const spec = String(
+                doctor?.specialtyName || doctor?.specialty || doctor?.specialization || '',
+              ).trim()
               return (
                 <article className="myappt-card" key={a.id}>
                   <div className="myappt-card-top">
