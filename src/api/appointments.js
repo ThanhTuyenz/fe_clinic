@@ -33,3 +33,18 @@ export async function createAppointment({ token, doctorId, appointmentDate, star
   return data
 }
 
+export async function listMyAppointments({ token }) {
+  const res = await fetch(`${base}/api/appointments/my`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không lấy được lịch khám.')
+  }
+  return data?.appointments || []
+}
+

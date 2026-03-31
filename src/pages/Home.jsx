@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listDoctors } from '../api/doctors.js'
+import logo from '../assets/logo.png'
+import banner from '../assets/Banner.jpg'
 import '../styles/landing.css'
 
 function getDoctorFullName(d) {
@@ -55,7 +57,7 @@ function parseDoctorSpecialty(bio) {
 }
 
 function getDoctorCardSpecialty(d) {
-  const s = String(d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
+  const s = String(d?.specialtyName || d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
   if (!s) return 'Chuyên khoa'
   if (s.length > 40 || /kinh nghiệm/i.test(s)) return 'Chuyên khoa'
   return s
@@ -73,6 +75,20 @@ function normalizeAvatarUrl(url) {
   // upanhlaylink often provides /view/ page; /img/ is the direct file path
   if (s.includes('sf-static.upanhlaylink.com/view/')) return s.replace('/view/', '/img/')
   return s
+}
+
+function getDoctorAvatarSrc(d) {
+  const candidate =
+    d?.avatarUrl ??
+    d?.avatarURL ??
+    d?.avatar ??
+    d?.avatar_url ??
+    d?.imageUrl ??
+    d?.image_url ??
+    d?.photoUrl ??
+    d?.photo_url ??
+    ''
+  return normalizeAvatarUrl(candidate)
 }
 
 export default function Landing() {
@@ -136,7 +152,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
-      <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
+          <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
         </Link>
         <nav className="landing-nav" aria-label="Điều hướng chính">
           <a href="#gioi-thieu">Giới thiệu</a>
@@ -151,7 +167,7 @@ export default function Landing() {
                     Xin chào, {user.displayName || user.fullName || user.email}
                   </span>
                   <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
-                    <Link className="landing-user-menu-item" to="/appointments" role="menuitem">
+                    <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                       Lịch khám
                     </Link>
                     <Link className="landing-user-menu-item" to="/home" role="menuitem">
@@ -183,7 +199,11 @@ export default function Landing() {
       </header>
 
       <main className="landing-main">
-        <section className="landing-hero" aria-labelledby="landing-title">
+        <section
+          className="landing-hero"
+          aria-labelledby="landing-title"
+          style={{ backgroundImage: `url(${banner})` }}
+        >
           <h1 id="landing-title">Chăm sóc sức khỏe tận tâm, đặt lịch thuận tiện</h1>
           <p>
             VitaCare Clinic hỗ trợ quy trình khám chữa bệnh minh bạch và đặt lịch
@@ -262,10 +282,10 @@ export default function Landing() {
                     >
                       <div className="landing-doctor-avatar" aria-hidden="true">
                         <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
-                        {normalizeAvatarUrl(d?.avatarUrl || d?.imageUrl || d?.photoUrl) ? (
+                        {getDoctorAvatarSrc(d) ? (
                           <img
                             className="landing-avatar-img"
-                            src={normalizeAvatarUrl(d.avatarUrl || d.imageUrl || d.photoUrl)}
+                            src={getDoctorAvatarSrc(d)}
                             alt=""
                             loading="lazy"
                             onError={(e) => {

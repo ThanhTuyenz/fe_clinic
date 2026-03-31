@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { listDoctors } from '../api/doctors.js'
+import { isMongoObjectId, listDoctors } from '../api/doctors.js'
 import { createAppointment } from '../api/appointments.js'
+import logo from '../assets/logo.png'
 import '../styles/auth.css'
 import '../styles/appointment.css'
 import '../styles/landing.css'
@@ -80,7 +81,7 @@ function parseDoctorSpecialty(bio) {
 }
 
 function getDoctorSpecialtyShort(d) {
-  const direct = String(d?.specialty || '').trim()
+  const direct = String(d?.specialtyName || d?.specialty || '').trim()
   if (direct) return direct
 
   const fromBio = String(parseDoctorSpecialty(d?.bio || '') || '').trim()
@@ -132,10 +133,15 @@ function simpleSeedFromIso(iso) {
 function getDoctorExperienceYears(d) {
   if (!d) return null
 
-  // Prefer explicit numeric fields if backend provides them
-  const direct =
-    d.experienceYears ?? d.yearsOfExperience ?? d.experience ?? d.expYears ?? null
-  if (Number.isFinite(Number(direct))) return Number(direct)
+  // Prefer explicit fields if backend provides them
+  const directCandidate =
+    d.experienceYears ?? d.yearsOfExperience ?? d.years ?? d.experience ?? d.expYears ?? null
+
+  if (directCandidate !== null && directCandidate !== undefined && directCandidate !== '') {
+    // Support cases like: "15", 15, "15 năm"
+    const extracted = Number(String(directCandidate).replace(/[^\d.]/g, ''))
+    if (Number.isFinite(extracted) && extracted > 0) return extracted
+  }
 
   const fromBio = parseDoctorExperienceYears(d.bio)
   if (fromBio != null) return fromBio
@@ -164,6 +170,20 @@ function normalizeAvatarUrl(url) {
   return s
 }
 
+function getDoctorAvatarSrc(d) {
+  const candidate =
+    d?.avatarUrl ??
+    d?.avatarURL ??
+    d?.avatar ??
+    d?.avatar_url ??
+    d?.imageUrl ??
+    d?.image_url ??
+    d?.photoUrl ??
+    d?.photo_url ??
+    ''
+  return normalizeAvatarUrl(candidate)
+}
+
 export default function Appointment() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -175,9 +195,11 @@ export default function Appointment() {
 
   const [doctorId, setDoctorId] = useState('')
   const [doctorLoadError, setDoctorLoadError] = useState('')
-  const [showAll, setShowAll] = useState(false)
   const [showDoctorDetail, setShowDoctorDetail] = useState(false)
   const [showBookingInfo, setShowBookingInfo] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [activeDeptId, setActiveDeptId] = useState('')
+  const [page, setPage] = useState(1)
 
   const [appointmentDate, setAppointmentDate] = useState(() => {
     const d = new Date()
@@ -273,11 +295,64 @@ export default function Appointment() {
     }, 0)
   }
 
-  const visibleDoctors = showAll ? doctors : doctors.slice(0, 4)
-  const selectedDoctor = doctors.find((d) => d.id === doctorId) || null
-  const selectedSpecialty = getDoctorSpecialtyShort(selectedDoctor)
+  const departments = useMemo(() => {
+    const map = new Map()
+    for (const d of doctors || []) {
+      const id = String(d?.deptID || '').trim()
+      const name = String(d?.deptName || '').trim()
+      if (!id || !name) continue
+      const prev = map.get(id)
+      map.set(id, prev ? { ...prev, count: prev.count + 1 } : { id, name, count: 1 })
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
+  }, [doctors])
+
+  const filteredDoctors = useMemo(() => {
+    const q = String(searchQuery || '').trim().toLowerCase()
+    const deptId = String(activeDeptId || '').trim()
+    return (doctors || []).filter((d) => {
+      if (deptId && String(d?.deptID || '').trim() !== deptId) return false
+      if (!q) return true
+      const name = getDoctorFullName(d).toLowerCase()
+      const rankName = getDoctorRankName(d).toLowerCase()
+      const email = String(d?.email || '').toLowerCase()
+      const spec = String(d?.specialtyName || d?.specialty || getDoctorSpecialtyShort(d) || '').toLowerCase()
+      const dept = String(d?.deptName || '').toLowerCase()
+      return name.includes(q) || rankName.includes(q) || email.includes(q) || spec.includes(q) || dept.includes(q)
+    })
+  }, [doctors, searchQuery, activeDeptId])
+
+  const pageSize = 9
+  const totalPages = Math.max(1, Math.ceil(filteredDoctors.length / pageSize))
+  const clampedPage = Math.min(Math.max(1, page), totalPages)
+  const pagedDoctors = useMemo(() => {
+    const start = (clampedPage - 1) * pageSize
+    return filteredDoctors.slice(start, start + pageSize)
+  }, [filteredDoctors, clampedPage])
+
+  const selectedDoctor =
+    filteredDoctors.find((d) => d.id === doctorId) ||
+    doctors.find((d) => d.id === doctorId) ||
+    null
+  const selectedSpecialty =
+    (selectedDoctor &&
+      String(selectedDoctor.specialtyName || selectedDoctor.specialty || '').trim()) ||
+    getDoctorSpecialtyShort(selectedDoctor)
   const selectedExperienceYears = getDoctorExperienceYears(selectedDoctor)
   const displayDoctorTitle = selectedDoctor ? `Bác sĩ ${getDoctorFullName(selectedDoctor)}` : ''
+
+  // Keep selected doctor valid when filters change
+  useEffect(() => {
+    if (showDoctorDetail || showBookingInfo) return
+    if (!doctorId) return
+    if (filteredDoctors.some((d) => d.id === doctorId)) return
+    if (filteredDoctors[0]?.id) setDoctorId(filteredDoctors[0].id)
+  }, [filteredDoctors, doctorId, showDoctorDetail, showBookingInfo])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, activeDeptId])
 
   const upcomingDays = useMemo(() => {
     const start = new Date()
@@ -386,18 +461,26 @@ export default function Appointment() {
       setBookingError('Thiếu thông tin để đặt lịch.')
       return
     }
+    const doctorIdToSend = String(selectedDoctor.id ?? doctorId).trim()
+    if (!isMongoObjectId(doctorIdToSend)) {
+      setBookingError(
+        'Bác sĩ không hợp lệ (thiếu id MongoDB). Vui lòng tải lại trang và chọn bác sĩ từ danh sách.',
+      )
+      return
+    }
     setBookingLoading(true)
     try {
       await createAppointment({
         token,
-        doctorId,
+        doctorId: doctorIdToSend,
         appointmentDate,
         startTime,
         note,
       })
       navigate('/home', { replace: true })
     } catch (err) {
-      setBookingError(err.message || 'Đặt lịch thất bại.')
+      const msg = err?.message || 'Đặt lịch thất bại.'
+      setBookingError(`${msg} (doctorId=${doctorIdToSend})`)
     } finally {
       setBookingLoading(false)
     }
@@ -429,7 +512,7 @@ export default function Appointment() {
     <div className="appointment-page">
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
-          <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
+          <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
         </Link>
         <nav className="landing-nav" aria-label="Điều hướng chính">
           <Link to="/landing#gioi-thieu">Giới thiệu</Link>
@@ -444,7 +527,7 @@ export default function Appointment() {
                     Xin chào, {user.displayName || user.fullName || user.email}
                   </span>
                   <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
-                    <Link className="landing-user-menu-item" to="/appointments" role="menuitem">
+                    <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                       Lịch khám
                     </Link>
                     <Link className="landing-user-menu-item" to="/home" role="menuitem">
@@ -491,10 +574,10 @@ export default function Appointment() {
               <div className="appointment-doctor-detail-hero-left">
                 <div className="appointment-doctor-detail-avatar" aria-hidden="true">
                   <span className="appointment-avatar-fallback">{getDoctorInitials(selectedDoctor)}</span>
-                  {normalizeAvatarUrl(selectedDoctor?.avatarUrl || selectedDoctor?.imageUrl || selectedDoctor?.photoUrl) ? (
+                  {getDoctorAvatarSrc(selectedDoctor) ? (
                     <img
                       className="appointment-avatar-img"
-                      src={normalizeAvatarUrl(selectedDoctor.avatarUrl || selectedDoctor.imageUrl || selectedDoctor.photoUrl)}
+                      src={getDoctorAvatarSrc(selectedDoctor)}
                       alt=""
                       loading="lazy"
                       onError={(e) => {
@@ -545,17 +628,50 @@ export default function Appointment() {
           showBookingInfo ? (
             null
           ) : (
-            <div className="appointment-topbar">
-              <h2 className="appointment-title">Đặt khám bác sĩ</h2>
-              <button
-                type="button"
-                className="appointment-all-btn"
-                disabled={loadingDoctors || doctors.length <= 4}
-                onClick={() => setShowAll((v) => !v)}
-              >
-                {showAll ? 'Thu gọn' : 'Xem tất cả'} <span aria-hidden="true">→</span>
-              </button>
-            </div>
+            <>
+              <div className="appointment-topbar">
+                <div className="appointment-topbar-left">
+                  <div className="appointment-search" role="search">
+                    <input
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Tìm bác sĩ theo tên / chuyên khoa..."
+                      aria-label="Tìm bác sĩ"
+                    />
+                    {searchQuery ? (
+                      <button
+                        type="button"
+                        className="appointment-search-clear"
+                        onClick={() => setSearchQuery('')}
+                        aria-label="Xóa tìm kiếm"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+
+              {activeDeptId || searchQuery ? (
+                <div className="appointment-filterbar" aria-label="Bộ lọc">
+                  {activeDeptId ? (
+                    <button
+                      type="button"
+                      className="appointment-filter-chip is-active"
+                      onClick={() => setActiveDeptId('')}
+                      aria-label="Bỏ lọc khoa"
+                    >
+                      {departments.find((s) => s.id === activeDeptId)?.name || 'Khoa'} ✕
+                    </button>
+                  ) : null}
+                  {searchQuery ? (
+                    <span className="appointment-filter-hint">
+                      Kết quả: <strong>{filteredDoctors.length}</strong>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </>
           )
         )}
 
@@ -566,76 +682,167 @@ export default function Appointment() {
         ) : null}
 
         {!showDoctorDetail && !showBookingInfo ? (
-          <section className="appointment-doctor-strip" aria-label="Danh sách bác sĩ">
-            {loadingDoctors ? (
-              Array.from({ length: 4 }).map((_, idx) => (
-                <div
-                  className="appointment-doctor-card"
-                  key={`sk-${idx}`}
-                  aria-hidden="true"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  <div className="appointment-doctor-avatar" style={{ opacity: 0.6 }}>
-                    ...
+          <>
+            <div className="appointment-browse" aria-label="Tìm bác sĩ và lọc theo khoa">
+              <aside className="appointment-filters" aria-label="Bộ lọc theo khoa">
+                <div className="appointment-specialty-head">
+                  <div>
+                    <h3 className="appointment-specialty-title">Đặt khám theo khoa</h3>
+                    <p className="appointment-specialty-sub">Chọn khoa để lọc nhanh bác sĩ phù hợp.</p>
                   </div>
-                  <div className="appointment-doctor-name" style={{ opacity: 0.6 }}>
-                    Đang tải...
-                  </div>
-                  <div className="appointment-doctor-spec" style={{ opacity: 0.6 }}>
-                    ...
-                  </div>
-                  <button className="appointment-book-btn" type="button" disabled style={{ opacity: 0.7 }}>
-                    <span>Đặt lịch ngay</span>
-                    <span className="appointment-book-arrow" aria-hidden="true">
-                      ›
-                    </span>
-                  </button>
-                </div>
-              ))
-            ) : visibleDoctors.length ? (
-              visibleDoctors.map((d) => {
-                const specialty = parseDoctorSpecialty(d.bio)
-                return (
-                  <div
-                    className="appointment-doctor-card"
-                    key={d.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Xem chi tiết bác sĩ ${getDoctorFullName(d)}`}
-                    onClick={() => handleOpenDoctorDetail(d.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') handleOpenDoctorDetail(d.id)
-                    }}
-                  >
-                    <div className="appointment-doctor-avatar" aria-hidden="true">
-                      {getDoctorInitials(d)}
-                    </div>
-                    <div className="appointment-doctor-name">{getDoctorRankName(d)}</div>
-                    <div className="appointment-doctor-spec">{specialty || 'Chuyên khoa'}</div>
-
+                  {activeDeptId ? (
                     <button
                       type="button"
-                      className="appointment-book-btn"
-                      onClick={(e) => {
-                        // Prevent the card click from reopening detail twice.
-                        e.stopPropagation()
-                        handlePickDoctor(d.id)
-                      }}
+                      className="appointment-specialty-reset"
+                      onClick={() => setActiveDeptId('')}
                     >
-                      <span>Đặt lịch ngay</span>
-                      <span className="appointment-book-arrow" aria-hidden="true">
-                        ›
-                      </span>
+                      Bỏ lọc
                     </button>
-                  </div>
-                )
-              })
-            ) : (
-              <div style={{ padding: '12px 0', color: 'var(--muted)', fontWeight: 600 }}>
-                Không có bác sĩ khả dụng.
-              </div>
-            )}
-          </section>
+                  ) : null}
+                </div>
+
+                <div className="appointment-specialty-list" role="list">
+                  {departments.length ? (
+                    departments.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        role="listitem"
+                        className={`appointment-specialty-item ${activeDeptId === s.id ? 'is-active' : ''}`}
+                        onClick={() => {
+                          setActiveDeptId((cur) => (cur === s.id ? '' : s.id))
+                        }}
+                        aria-pressed={activeDeptId === s.id}
+                      >
+                        <span className="appointment-specialty-item-name">{s.name}</span>
+                        <span className="appointment-specialty-item-count">{s.count}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="appointment-specialty-empty">Chưa có dữ liệu khoa.</div>
+                  )}
+                </div>
+              </aside>
+
+              <main className="appointment-results" aria-label="Danh sách bác sĩ">
+                <section className="appointment-doctor-strip" aria-label="Danh sách bác sĩ">
+                  {loadingDoctors ? (
+                    Array.from({ length: 4 }).map((_, idx) => (
+                      <div
+                        className="appointment-doctor-card"
+                        key={`sk-${idx}`}
+                        aria-hidden="true"
+                        style={{ pointerEvents: 'none' }}
+                      >
+                        <div className="appointment-doctor-avatar" style={{ opacity: 0.6 }}>
+                          ...
+                        </div>
+                        <div className="appointment-doctor-name" style={{ opacity: 0.6 }}>
+                          Đang tải...
+                        </div>
+                        <div className="appointment-doctor-spec" style={{ opacity: 0.6 }}>
+                          ...
+                        </div>
+                        <button className="appointment-book-btn" type="button" disabled style={{ opacity: 0.7 }}>
+                          <span>Đặt lịch ngay</span>
+                          <span className="appointment-book-arrow" aria-hidden="true">
+                            ›
+                          </span>
+                        </button>
+                      </div>
+                    ))
+                  ) : pagedDoctors.length ? (
+                    pagedDoctors.map((d) => {
+                      const specialty =
+                        String(d?.specialtyName || d?.specialty || '').trim() ||
+                        getDoctorSpecialtyShort(d)
+                      const experienceYears = getDoctorExperienceYears(d)
+                      const experienceLabel =
+                        Number.isFinite(experienceYears) && experienceYears > 0
+                          ? `${experienceYears} năm kinh nghiệm`
+                          : '—'
+
+                      const avatarSrc = getDoctorAvatarSrc(d)
+                      return (
+                        <div
+                          className="appointment-doctor-card"
+                          key={d.id}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Xem chi tiết bác sĩ ${getDoctorFullName(d)}`}
+                          onClick={() => handleOpenDoctorDetail(d.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') handleOpenDoctorDetail(d.id)
+                          }}
+                        >
+                          <div className="appointment-doctor-avatar" aria-hidden="true">
+                            <span className="appointment-avatar-fallback">{getDoctorInitials(d)}</span>
+                            {avatarSrc ? (
+                              <img
+                                className="appointment-avatar-img"
+                                src={avatarSrc}
+                                alt=""
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none'
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                          <div className="appointment-doctor-name">{getDoctorRankName(d)}</div>
+                          <div className="appointment-doctor-spec">{specialty || 'Chuyên khoa'}</div>
+                          <div className="appointment-doctor-exp">{experienceLabel}</div>
+
+                          <button
+                            type="button"
+                            className="appointment-book-btn"
+                            onClick={(e) => {
+                              // Prevent the card click from reopening detail twice.
+                              e.stopPropagation()
+                              handlePickDoctor(d.id)
+                            }}
+                          >
+                            <span>Đặt lịch ngay</span>
+                            <span className="appointment-book-arrow" aria-hidden="true">
+                              ›
+                            </span>
+                          </button>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <div style={{ padding: '12px 0', color: 'var(--muted)', fontWeight: 600 }}>
+                      Không có bác sĩ khả dụng.
+                    </div>
+                  )}
+                </section>
+
+                {!loadingDoctors && filteredDoctors.length > pageSize ? (
+                  <nav className="appointment-pagination" aria-label="Phân trang bác sĩ">
+                    <button
+                      type="button"
+                      className="appointment-page-btn"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={clampedPage <= 1}
+                    >
+                      ← Trước
+                    </button>
+                    <span className="appointment-page-info">
+                      Trang <strong>{clampedPage}</strong>/<strong>{totalPages}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      className="appointment-page-btn"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={clampedPage >= totalPages}
+                    >
+                      Sau →
+                    </button>
+                  </nav>
+                ) : null}
+              </main>
+            </div>
+          </>
         ) : null}
 
         {showDoctorDetail && selectedDoctor && !showBookingInfo ? (
