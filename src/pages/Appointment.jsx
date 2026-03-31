@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { isMongoObjectId, listDoctors } from '../api/doctors.js'
-import { createAppointment } from '../api/appointments.js'
+import { createAppointment, getAvailability } from '../api/appointments.js'
 import logo from '../assets/logo.png'
 import '../styles/auth.css'
 import '../styles/appointment.css'
@@ -392,27 +392,45 @@ export default function Appointment() {
     })
   }, [])
 
-  const slotAvailability = useMemo(() => {
-    // Demo only. Replace with API:
-    // GET /api/appointments/availability?doctorId=...&date=...
-    // Return list of disabled start times for selected doctor/date.
-    const seed = simpleSeedFromIso(`${doctorId || 'd'}:${appointmentDate}`)
-    const disabled = new Set()
-    const isFullDay = seed % 7 === 0
+  const [disabledStarts, setDisabledStarts] = useState(() => new Set())
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
+  const [availabilityError, setAvailabilityError] = useState('')
 
-    if (isFullDay) {
-      timeSlots.forEach((s) => disabled.add(s.start))
-    } else {
-      const toDisable = Math.min(10, 2 + (seed % 6))
-      for (let i = 0; i < toDisable; i += 1) {
-        const idx = (seed + i * 3) % timeSlots.length
-        disabled.add(timeSlots[idx].start)
-      }
+  useEffect(() => {
+    if (!token || !user) return
+    if (!doctorId || !appointmentDate) return
+
+    let mounted = true
+    setAvailabilityLoading(true)
+    setAvailabilityError('')
+
+    getAvailability({ token, doctorId, date: appointmentDate })
+      .then((data) => {
+        if (!mounted) return
+        const booked = (data?.bookedStartTimes || []).map((s) => String(s || '').trim()).filter(Boolean)
+        setDisabledStarts(new Set(booked))
+      })
+      .catch((err) => {
+        if (!mounted) return
+        setAvailabilityError(err?.message || 'Không tải được khung giờ.')
+        setDisabledStarts(new Set())
+      })
+      .finally(() => {
+        if (!mounted) return
+        setAvailabilityLoading(false)
+      })
+
+    return () => {
+      mounted = false
     }
+  }, [token, user, doctorId, appointmentDate])
 
-    const availableCount = timeSlots.length - disabled.size
-    return { disabled, isFullDay, availableCount }
-  }, [doctorId, appointmentDate, timeSlots])
+  const slotAvailability = useMemo(() => {
+    const disabled = disabledStarts || new Set()
+    const isFullDay = timeSlots.length > 0 && disabled.size >= timeSlots.length
+    const availableCount = Math.max(0, timeSlots.length - disabled.size)
+    return { disabled, isFullDay, availableCount, loading: availabilityLoading, error: availabilityError }
+  }, [disabledStarts, timeSlots.length, availabilityLoading, availabilityError])
 
   const upcomingDaysWithMeta = useMemo(() => {
     return upcomingDays.map((d) => {

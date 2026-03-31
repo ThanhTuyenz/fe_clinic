@@ -28,6 +28,14 @@ export default function Login() {
       localStorage.removeItem('user')
       sessionStorage.removeItem('token')
       sessionStorage.removeItem('user')
+
+      const userType = String(data?.user?.userType || '').toLowerCase()
+      const role = String(data?.user?.role || '').toLowerCase()
+      const isPatient = userType === 'patient' || role === 'patient'
+      if (!isPatient) {
+        throw new Error('Chỉ bệnh nhân mới được phép đăng nhập tại trang này.')
+      }
+
       if (remember) {
         localStorage.setItem('token', data.token)
         localStorage.setItem('user', JSON.stringify(data.user))

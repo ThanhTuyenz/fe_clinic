@@ -48,3 +48,23 @@ export async function listMyAppointments({ token }) {
   return data?.appointments || []
 }
 
+export async function getAvailability({ token, doctorId, date }) {
+  const qs = new URLSearchParams({
+    doctorId: String(doctorId || '').trim(),
+    date: String(date || '').trim(),
+  })
+
+  const res = await fetch(`${base}/api/appointments/availability?${qs.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không lấy được khung giờ.')
+  }
+  return data
+}
+
