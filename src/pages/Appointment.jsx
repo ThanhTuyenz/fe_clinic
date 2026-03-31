@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { listDoctors } from '../api/doctors.js'
+import { isMongoObjectId, listDoctors } from '../api/doctors.js'
 import { createAppointment } from '../api/appointments.js'
+import logo from '../assets/react.svg'
 import '../styles/auth.css'
 import '../styles/appointment.css'
 import '../styles/landing.css'
@@ -460,18 +461,26 @@ export default function Appointment() {
       setBookingError('Thiếu thông tin để đặt lịch.')
       return
     }
+    const doctorIdToSend = String(selectedDoctor.id ?? doctorId).trim()
+    if (!isMongoObjectId(doctorIdToSend)) {
+      setBookingError(
+        'Bác sĩ không hợp lệ (thiếu id MongoDB). Vui lòng tải lại trang và chọn bác sĩ từ danh sách.',
+      )
+      return
+    }
     setBookingLoading(true)
     try {
       await createAppointment({
         token,
-        doctorId,
+        doctorId: doctorIdToSend,
         appointmentDate,
         startTime,
         note,
       })
       navigate('/home', { replace: true })
     } catch (err) {
-      setBookingError(err.message || 'Đặt lịch thất bại.')
+      const msg = err?.message || 'Đặt lịch thất bại.'
+      setBookingError(`${msg} (doctorId=${doctorIdToSend})`)
     } finally {
       setBookingLoading(false)
     }
@@ -503,7 +512,7 @@ export default function Appointment() {
     <div className="appointment-page">
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
-          <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
+          <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
         </Link>
         <nav className="landing-nav" aria-label="Điều hướng chính">
           <Link to="/landing#gioi-thieu">Giới thiệu</Link>
@@ -518,7 +527,7 @@ export default function Appointment() {
                     Xin chào, {user.displayName || user.fullName || user.email}
                   </span>
                   <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
-                    <Link className="landing-user-menu-item" to="/appointments" role="menuitem">
+                    <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                       Lịch khám
                     </Link>
                     <Link className="landing-user-menu-item" to="/home" role="menuitem">

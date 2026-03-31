@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { listDoctors } from '../api/doctors.js'
+import logo from '../assets/logo.png'
+import banner from '../assets/Banner.jpg'
 import '../styles/landing.css'
 
 function getDoctorFullName(d) {
@@ -150,7 +152,7 @@ export default function Landing() {
     <div className="landing">
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
-      <img className="landing-logo" src="/dist/assets/logo.png" alt="VitaCare Clinic" />
+          <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
         </Link>
         <nav className="landing-nav" aria-label="Điều hướng chính">
           <a href="#gioi-thieu">Giới thiệu</a>
@@ -165,7 +167,7 @@ export default function Landing() {
                     Xin chào, {user.displayName || user.fullName || user.email}
                   </span>
                   <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
-                    <Link className="landing-user-menu-item" to="/appointments" role="menuitem">
+                    <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                       Lịch khám
                     </Link>
                     <Link className="landing-user-menu-item" to="/home" role="menuitem">
@@ -197,7 +199,11 @@ export default function Landing() {
       </header>
 
       <main className="landing-main">
-        <section className="landing-hero" aria-labelledby="landing-title">
+        <section
+          className="landing-hero"
+          aria-labelledby="landing-title"
+          style={{ backgroundImage: `url(${banner})` }}
+        >
           <h1 id="landing-title">Chăm sóc sức khỏe tận tâm, đặt lịch thuận tiện</h1>
           <p>
             VitaCare Clinic hỗ trợ quy trình khám chữa bệnh minh bạch và đặt lịch
