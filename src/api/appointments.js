@@ -33,6 +33,22 @@ export async function createAppointment({ token, doctorId, appointmentDate, star
   return data
 }
 
+export async function cancelAppointment({ token, appointmentId }) {
+  const id = String(appointmentId || '').trim()
+  const res = await fetch(`${base}/api/appointments/${encodeURIComponent(id)}/cancel`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không hủy được lịch khám.')
+  }
+  return data
+}
+
 export async function listMyAppointments({ token }) {
   const res = await fetch(`${base}/api/appointments/my`, {
     method: 'GET',

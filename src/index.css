@@ -1,4 +1,8 @@
 :root {
+  /* Cùng bề ngang header và cột nội dung chính (trang Home / landing-main) */
+  --site-content-max: 1120px;
+  --site-gutter-x: 1.5rem;
+
   --clinic-primary: #0d9488;
   --clinic-primary-dark: #0f766e;
   --clinic-primary-soft: rgba(13, 148, 136, 0.12);

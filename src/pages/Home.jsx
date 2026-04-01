@@ -118,8 +118,10 @@ export default function Landing() {
 
   useEffect(() => {
     let mounted = true
+    /* eslint-disable react-hooks/set-state-in-effect -- reset UI before async listDoctors */
     setLoadingDoctors(true)
     setDoctorError('')
+    /* eslint-enable react-hooks/set-state-in-effect */
     listDoctors()
       .then((docs) => {
         if (!mounted) return

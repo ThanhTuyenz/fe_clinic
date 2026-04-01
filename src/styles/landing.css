@@ -13,10 +13,10 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding: 0.45rem 1.25rem;
+  width: 100%;
+  padding: 0.45rem var(--site-gutter-x);
   min-height: 56px;
-  max-width: 1120px;
-  margin: 0 auto;
+  margin: 0;
   background: rgba(248, 250, 252, 0.92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
@@ -125,9 +125,10 @@
 }
 
 .landing-main {
-  max-width: 1120px;
+  width: 100%;
+  max-width: var(--site-content-max);
   margin: 0 auto;
-  padding: 2rem 1.5rem 3rem;
+  padding: 2rem var(--site-gutter-x) 3rem;
 }
 
 .landing-hero {

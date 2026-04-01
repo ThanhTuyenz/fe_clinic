@@ -5,9 +5,10 @@
 }
 
 .appointment-container {
-  width: min(1180px, 92%);
+  width: 100%;
+  max-width: var(--site-content-max);
   margin: 0 auto;
-  padding-top: 24px;
+  padding: 24px var(--site-gutter-x) 0;
 }
 
 .appointment-topbar {
@@ -1266,7 +1267,7 @@
   }
 
   .appointment-container {
-    width: 92%;
+    width: 100%;
   }
 
   .appointment-topbar {

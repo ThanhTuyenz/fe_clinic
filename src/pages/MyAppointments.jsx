@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { listMyAppointments } from '../api/appointments.js'
+import { cancelAppointment, listMyAppointments } from '../api/appointments.js'
 import logo from '../assets/logo.png'
 import '../styles/landing.css'
 import '../styles/my-appointments.css'
@@ -29,6 +29,54 @@ function formatDateVi(isoOrDate) {
   return `${dd}/${mm}/${yy}`
 }
 
+function addMinutesToHHmm(hhmm, minutesToAdd) {
+  const [hh, mm] = String(hhmm || '00:00')
+    .split(':')
+    .map((v) => Number(v))
+  if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(minutesToAdd)) return hhmm
+  const d = new Date()
+  d.setHours(hh)
+  d.setMinutes(mm + minutesToAdd)
+  const eh = d.getHours().toString().padStart(2, '0')
+  const em = d.getMinutes().toString().padStart(2, '0')
+  return `${eh}:${em}`
+}
+
+function buildTicketCode(appointmentId, appointmentDate) {
+  const id = String(appointmentId).replace(/[^a-fA-F0-9]/g, '')
+  const d = new Date(appointmentDate)
+  if (Number.isNaN(d.getTime())) return `YMA${id.slice(-10).toUpperCase()}`
+  const yy = String(d.getFullYear()).slice(-2)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  const suffix = (id.slice(-6) || '000000').toUpperCase()
+  return `YMA${yy}${mm}${dd}${suffix}`
+}
+
+function queueNumberFromId(id) {
+  const s = String(id).replace(/[^a-fA-F0-9]/g, '')
+  let n = 0
+  for (let i = 0; i < s.length; i += 1) n = (n * 31 + s.charCodeAt(i)) % 10000
+  return Math.max(1, (n % 99) + 1)
+}
+
+function periodLabel(startTime) {
+  const [h] = String(startTime || '12:00')
+    .split(':')
+    .map((v) => Number(v))
+  if (!Number.isFinite(h)) return ''
+  if (h < 12) return 'Buổi sáng'
+  if (h < 18) return 'Buổi chiều'
+  return 'Buổi tối'
+}
+
+function buildPatientCode(userId) {
+  const raw = String(userId || '').replace(/[^a-fA-F0-9]/g, '')
+  const yy = String(new Date().getFullYear()).slice(-2)
+  const pad = (raw + '00000000').slice(0, 8).toUpperCase()
+  return `YM${yy}${pad}`
+}
+
 function getDoctorName(doc) {
   if (!doc) return '—'
   const first = String(doc?.firstName || '').trim()
@@ -42,12 +90,53 @@ function getDoctorName(doc) {
   )
 }
 
+function getDoctorInitials(doc) {
+  const ln = String(doc?.lastName || '').trim()
+  const fn = String(doc?.firstName || '').trim()
+  if (ln || fn) return `${ln ? ln[0] : ''}${fn ? fn[0] : ''}`.toUpperCase()
+  const n = getDoctorName(doc)
+  const w = n.trim().split(/\s+/).filter(Boolean)
+  if (!w.length) return '?'
+  return w
+    .slice(0, 2)
+    .map((x) => x[0])
+    .join('')
+    .toUpperCase()
+}
+
+function normalizeAvatarUrl(url) {
+  const s = String(url || '').trim()
+  if (!s) return ''
+  if (s.includes('sf-static.upanhlaylink.com/view/')) return s.replace('/view/', '/img/')
+  return s
+}
+
 function statusLabel(status) {
   const s = String(status || '').toLowerCase()
-  if (s === 'confirmed') return { text: 'Đã xác nhận', tone: 'ok' }
   if (s === 'cancelled') return { text: 'Đã hủy', tone: 'bad' }
+  if (s === 'confirmed') return { text: 'Đã xác nhận', tone: 'ok' }
+  if (s === 'pending') return { text: 'Đã đặt lịch', tone: 'ok' }
   return { text: 'Chờ xác nhận', tone: 'pending' }
 }
+
+function formatUserDob(user) {
+  const raw = user?.dob
+  if (!raw) return '—'
+  try {
+    return formatDateVi(raw)
+  } catch {
+    return '—'
+  }
+}
+
+function formatUserGender(user) {
+  if (user?.gender === true) return 'Nam'
+  if (user?.gender === false) return 'Nữ'
+  if (typeof user?.gender === 'string') return user.gender
+  return '—'
+}
+
+const SLOT_MINUTES = 12
 
 export default function MyAppointments() {
   const navigate = useNavigate()
@@ -56,6 +145,10 @@ export default function MyAppointments() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedId, setSelectedId] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelErr, setCancelErr] = useState('')
 
   useEffect(() => {
     if (!token || !user) {
@@ -85,6 +178,32 @@ export default function MyAppointments() {
     }
   }, [token, user, navigate])
 
+  const filtered = useMemo(() => {
+    const q = String(searchQuery || '')
+      .trim()
+      .toLowerCase()
+    if (!q) return items
+    return (items || []).filter((a) => {
+      const doctor = getDoctorName(a?.doctor).toLowerCase()
+      const ticket = buildTicketCode(a.id, a.appointmentDate).toLowerCase()
+      const patient = String(user?.displayName || user?.fullName || user?.email || '').toLowerCase()
+      return doctor.includes(q) || ticket.includes(q) || patient.includes(q)
+    })
+  }, [items, searchQuery, user])
+
+  const selected = useMemo(() => {
+    if (!filtered.length) return null
+    const by = filtered.find((a) => String(a.id) === String(selectedId))
+    return by || filtered[0]
+  }, [filtered, selectedId])
+
+  useEffect(() => {
+    if (!filtered.length) return
+    if (!selectedId || !filtered.some((a) => String(a.id) === String(selectedId))) {
+      setSelectedId(filtered[0].id)
+    }
+  }, [filtered, selectedId])
+
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -92,6 +211,69 @@ export default function MyAppointments() {
     sessionStorage.removeItem('user')
     navigate('/landing', { replace: true })
   }
+
+  async function handleCancelAppointment() {
+    if (!selected || !token) return
+    if (String(selected.status).toLowerCase() === 'cancelled') return
+    setCancelErr('')
+    if (!window.confirm('Bạn có chắc muốn hủy lịch khám này?')) return
+    setCancelling(true)
+    try {
+      await cancelAppointment({ token, appointmentId: String(selected.id) })
+      setItems((prev) =>
+        prev.map((x) =>
+          String(x.id) === String(selected.id) ? { ...x, status: 'cancelled' } : x,
+        ),
+      )
+    } catch (err) {
+      setCancelErr(err?.message || 'Không hủy được lịch.')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  const detailView = useMemo(() => {
+    if (!selected) return null
+    const doctor = selected.doctor
+    const st = statusLabel(selected.status)
+    const start = String(selected.startTime || '').trim()
+    const end = selected.endTime
+      ? String(selected.endTime).trim()
+      : addMinutesToHHmm(start, SLOT_MINUTES)
+    const ticket = buildTicketCode(selected.id, selected.appointmentDate)
+    const stt = queueNumberFromId(selected.id)
+    const timeLine = `${start}-${end} (${periodLabel(start)})`
+    const avatar = normalizeAvatarUrl(doctor?.avatarUrl)
+    const dept = String(doctor?.deptName || '').trim()
+    const addrLine = dept ? `${dept} — Phòng khám VitaCare` : 'Phòng khám VitaCare'
+    const patientName = user?.displayName || user?.fullName || user?.email || '—'
+    const patientCode = buildPatientCode(user?.id)
+    const phone = String(user?.phone || '').trim() || '—'
+    const dob = formatUserDob(user)
+    const gender = formatUserGender(user)
+    const address = String(user?.address || '').trim() ? String(user.address).trim() : 'Chưa cập nhật'
+
+    return {
+      st,
+      start,
+      end,
+      ticket,
+      stt,
+      timeLine,
+      avatar,
+      doctorName: getDoctorName(doctor),
+      initials: getDoctorInitials(doctor),
+      addrLine,
+      patientName,
+      patientCode,
+      phone,
+      dob,
+      gender,
+      address,
+      dateVi: formatDateVi(selected.appointmentDate),
+      cancelled: String(selected.status).toLowerCase() === 'cancelled',
+    }
+  }, [selected, user])
 
   return (
     <div className="myappt-page">
@@ -134,7 +316,7 @@ export default function MyAppointments() {
         <div className="myappt-head">
           <div>
             <h1 className="myappt-title">Lịch khám đã đặt</h1>
-            <p className="myappt-sub">Theo dõi các lịch hẹn bạn đã đặt tại phòng khám.</p>
+            <p className="myappt-sub">Chọn một lịch để xem chi tiết và quản lý.</p>
           </div>
           <Link className="myappt-cta" to="/appointments">
             + Đặt lịch mới
@@ -150,53 +332,183 @@ export default function MyAppointments() {
         {loading ? (
           <div className="myappt-loading">Đang tải lịch khám…</div>
         ) : items.length ? (
-          <section className="myappt-list" aria-label="Danh sách lịch khám">
-            {items.map((a) => {
-              const st = statusLabel(a.status)
-              const doctor = a?.doctor ?? a?.doctorId ?? null
-              const dept = String(
-                doctor?.deptName || doctor?.dept || doctor?.departmentName || '',
-              ).trim()
-              const spec = String(
-                doctor?.specialtyName || doctor?.specialty || doctor?.specialization || '',
-              ).trim()
-              return (
-                <article className="myappt-card" key={a.id}>
-                  <div className="myappt-card-top">
-                    <div className="myappt-card-date">
-                      <div className="myappt-card-date-main">{formatDateVi(a.appointmentDate) || '—'}</div>
-                      <div className="myappt-card-date-sub">
-                        {a.startTime ? `Giờ: ${a.startTime}` : 'Giờ: —'}
-                        {a.endTime ? ` - ${a.endTime}` : ''}
-                      </div>
+          <div className="myappt-split">
+            <aside className="myappt-sidebar" aria-label="Danh sách lịch khám">
+              <input
+                type="search"
+                className="myappt-search"
+                placeholder="Mã giao dịch, tên dịch vụ, tên bệnh nhân,…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                aria-label="Tìm lịch khám"
+              />
+              <div className="myappt-sidebar-scroll">
+                {filtered.length ? (
+                  filtered.map((a) => {
+                    const st = statusLabel(a.status)
+                    const doctor = a?.doctor
+                    const doctorName = getDoctorName(doctor)
+                    const stt = queueNumberFromId(a.id)
+                    const start = String(a.startTime || '').trim()
+                    const end = a.endTime
+                      ? String(a.endTime).trim()
+                      : addMinutesToHHmm(start, SLOT_MINUTES)
+                    const patientLine = user?.displayName || user?.fullName || 'Bệnh nhân'
+                    const isActive = selected && String(selected.id) === String(a.id)
+                    const isCancelled = String(a.status || '').toLowerCase() === 'cancelled'
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className={`myappt-listcard ${isActive ? 'is-active' : ''}`}
+                        onClick={() => setSelectedId(a.id)}
+                      >
+                        <div className="myappt-listcard-body">
+                          <div className="myappt-listcard-title">{doctorName}</div>
+                          <div className="myappt-listcard-meta">
+                            {start}-{end} · {formatDateVi(a.appointmentDate)}
+                          </div>
+                          <div className="myappt-listcard-patient">{patientLine}</div>
+                        </div>
+                        <div className="myappt-listcard-side">
+                          <span className={`myappt-pill myappt-pill--${st.tone}`}>{st.text}</span>
+                          <div
+                            className={`myappt-stt-badge${isCancelled ? ' myappt-stt-badge--cancelled' : ''}`}
+                            aria-label={`STT ${stt}`}
+                          >
+                            {stt}
+                          </div>
+                        </div>
+                      </button>
+                    )
+                  })
+                ) : (
+                  <div className="myappt-sidebar-empty">Không có lịch phù hợp.</div>
+                )}
+              </div>
+            </aside>
+
+            <section className="myappt-detail" aria-label="Chi tiết lịch khám">
+              {detailView && selected ? (
+                <>
+                  <div className="myappt-detail-top">
+                    <div
+                      className={`myappt-detail-stt${detailView.cancelled ? ' myappt-detail-stt--cancelled' : ''}`}
+                    >
+                      STT: {detailView.stt}
                     </div>
-                    <span className={`myappt-status myappt-status--${st.tone}`}>{st.text}</span>
+                    <div className="myappt-detail-status">
+                      {!detailView.cancelled ? (
+                        <span className="myappt-status-icon" aria-hidden="true">
+                          ✓
+                        </span>
+                      ) : null}
+                      <span className={`myappt-pill myappt-pill--${detailView.st.tone}`}>{detailView.st.text}</span>
+                    </div>
                   </div>
 
-                  <div className="myappt-card-body">
-                    <div className="myappt-row">
-                      <div className="myappt-k">Bác sĩ</div>
-                      <div className="myappt-v">{getDoctorName(doctor)}</div>
-                    </div>
-                    <div className="myappt-row">
-                      <div className="myappt-k">Chuyên khoa</div>
-                      <div className="myappt-v">{spec || '—'}</div>
-                    </div>
-                    <div className="myappt-row">
-                      <div className="myappt-k">Khoa</div>
-                      <div className="myappt-v">{dept || '—'}</div>
-                    </div>
-                    {a.note ? (
-                      <div className="myappt-row">
-                        <div className="myappt-k">Ghi chú</div>
-                        <div className="myappt-v">{a.note}</div>
+                  <div className="myappt-detail-hero">
+                    <div className="myappt-detail-hero-left">
+                      <div className="myappt-d-avatar" aria-hidden="true">
+                        {!detailView.avatar ? (
+                          detailView.initials
+                        ) : (
+                          <img
+                            src={detailView.avatar}
+                            alt=""
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        )}
                       </div>
-                    ) : null}
+                      <div>
+                        <div className="myappt-d-name">{detailView.doctorName}</div>
+                        <div className="myappt-d-addr">{detailView.addrLine}</div>
+                      </div>
+                    </div>
+                    <div className="myappt-detail-qr">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(detailView.ticket)}`}
+                        alt=""
+                        width={140}
+                        height={140}
+                      />
+                    </div>
                   </div>
-                </article>
-              )
-            })}
-          </section>
+
+                  <div className="myappt-block">
+                    <h2 className="myappt-block-title">Thông tin đặt khám</h2>
+                    <div className="myappt-kv">
+                      <div className="myappt-kv-row">
+                        <span>Mã phiếu khám</span>
+                        <span>{detailView.ticket}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Ngày khám</span>
+                        <span>{detailView.dateVi}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Giờ khám</span>
+                        <span className="myappt-kv-time">{detailView.timeLine}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="myappt-block">
+                    <h2 className="myappt-block-title">Thông tin bệnh nhân</h2>
+                    <div className="myappt-kv">
+                      <div className="myappt-kv-row">
+                        <span>Mã bệnh nhân</span>
+                        <span>
+                          <span className="myappt-linkish">{detailView.patientCode}</span>
+                        </span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Họ và tên</span>
+                        <span>{detailView.patientName}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Ngày sinh</span>
+                        <span>{detailView.dob}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Số điện thoại</span>
+                        <span>{detailView.phone}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Giới tính</span>
+                        <span>{detailView.gender}</span>
+                      </div>
+                      <div className="myappt-kv-row">
+                        <span>Địa chỉ</span>
+                        <span>{detailView.address}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {cancelErr ? (
+                    <div className="myappt-inline-err" role="alert">
+                      {cancelErr}
+                    </div>
+                  ) : null}
+
+                  <div className="myappt-detail-actions">
+                    <button
+                      type="button"
+                      className="myappt-btn myappt-btn--danger"
+                      disabled={detailView.cancelled || cancelling}
+                      onClick={handleCancelAppointment}
+                    >
+                      {cancelling ? 'Đang hủy…' : 'Hủy lịch'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="myappt-detail-empty">Chọn một lịch trong danh sách.</div>
+              )}
+            </section>
+          </div>
         ) : (
           <div className="myappt-empty">
             <div className="myappt-empty-title">Bạn chưa có lịch khám nào.</div>
@@ -207,4 +519,3 @@ export default function MyAppointments() {
     </div>
   )
 }
-

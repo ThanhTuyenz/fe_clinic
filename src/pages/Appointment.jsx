@@ -92,15 +92,6 @@ function getDoctorSpecialtyShort(d) {
   return fromBio
 }
 
-function parseDoctorRankPrefix(bio) {
-  const s = String(bio || '').trim()
-  // Example: "Phó giáo sư, Tiến sĩ, Bác sĩ ..." or "Bác sĩ Nội tổng quát — ..."
-  // We try to take everything before the first "Bác sĩ".
-  const idx = s.toLowerCase().indexOf('bác sĩ')
-  if (idx <= 0) return ''
-  return s.slice(0, idx).replace(/[,|-]+$/g, '').trim()
-}
-
 function formatDayShort(date) {
   // date: Date instance
   const weekdays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7']
@@ -488,14 +479,45 @@ export default function Appointment() {
     }
     setBookingLoading(true)
     try {
-      await createAppointment({
+      const data = await createAppointment({
         token,
         doctorId: doctorIdToSend,
         appointmentDate,
         startTime,
         note,
       })
-      navigate('/home', { replace: true })
+      const appt = data?.appointment
+      const newId = appt?.id != null ? String(appt.id) : ''
+      if (!newId) {
+        setBookingError('Không nhận được mã lịch khám từ máy chủ.')
+        return
+      }
+      const addressParts = [
+        patientModalDraft.addressLine,
+        patientModalDraft.ward,
+        patientModalDraft.district,
+        patientModalDraft.province,
+      ]
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+      navigate(`/appointments/${newId}`, {
+        replace: true,
+        state: {
+          showSuccessToast: true,
+          bookingSummary: {
+            appointment: appt,
+            doctor: selectedDoctor,
+            patientName: patientDraft.fullName,
+            specialty: selectedSpecialty || '',
+            patientSnapshot: {
+              fullName: patientDraft.fullName,
+              dob: patientDraft.dob,
+              gender: patientDraft.gender,
+              address: addressParts.join(', '),
+            },
+          },
+        },
+      })
     } catch (err) {
       const msg = err?.message || 'Đặt lịch thất bại.'
       setBookingError(`${msg} (doctorId=${doctorIdToSend})`)
