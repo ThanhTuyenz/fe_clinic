@@ -67,3 +67,17 @@ export async function login({ email, password }) {
   }
   return data
 }
+
+export async function getMe({ token }) {
+  const res = await fetch(`${base}/api/auth/me`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không lấy được hồ sơ bệnh nhân.')
+  }
+  return data
+}

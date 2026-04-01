@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { getMe } from '../api/auth.js'
 import { isMongoObjectId, listDoctors } from '../api/doctors.js'
-import { createAppointment, getAvailability } from '../api/appointments.js'
+import { createAppointment, getAvailability, listMyAppointments } from '../api/appointments.js'
 import logo from '../assets/logo.png'
 import '../styles/auth.css'
 import '../styles/appointment.css'
@@ -20,6 +21,22 @@ function getSession() {
   const userRaw = localStorage.getItem('user') || sessionStorage.getItem('user')
   const user = safeParse(userRaw || 'null')
   return { token, user }
+}
+
+function formatDateVi(isoOrDate) {
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)
+  if (Number.isNaN(d.getTime())) return ''
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yy = d.getFullYear()
+  return `${dd}/${mm}/${yy}`
+}
+
+function buildPatientCode(userId) {
+  const raw = String(userId || '').replace(/[^a-fA-F0-9]/g, '')
+  const yy = String(new Date().getFullYear()).slice(-2)
+  const pad = (raw + '00000000').slice(0, 8).toUpperCase()
+  return `YMP${yy}${pad}`
 }
 
 function getDoctorFullName(d) {
@@ -113,14 +130,6 @@ function addMinutesToHHmm(hhmm, minutesToAdd) {
   return `${eh}:${em}`
 }
 
-function simpleSeedFromIso(iso) {
-  // Stable pseudo-random seed based on YYYY-MM-DD
-  const s = String(iso || '')
-  let x = 0
-  for (let i = 0; i < s.length; i += 1) x = (x * 31 + s.charCodeAt(i)) % 100000
-  return x
-}
-
 function getDoctorExperienceYears(d) {
   if (!d) return null
 
@@ -202,37 +211,23 @@ export default function Appointment() {
   const [bookingError, setBookingError] = useState('')
   const [bookingLoading, setBookingLoading] = useState(false)
 
-  // Demo patient data (replace with API later).
-  const [patients] = useState(() => [
-    {
-      id: 'p1',
-      code: 'YMP262764574',
-      fullName: 'Nguyễn Thanh Tuyền',
-      gender: 'Nam',
-      dob: '22/11/2003',
-      phone: '0378315195',
-    },
-    {
-      id: 'p2',
-      code: 'YMP289104552',
-      fullName: 'Trần Quang Nam',
-      gender: 'Nam',
-      dob: '08/04/1991',
-      phone: '0912345678',
-    },
-  ])
-  const selectedPatient = patients[0] || null
-  const [patientDraft, setPatientDraft] = useState(() =>
-    patients[0]
-      ? { ...patients[0] }
-      : { id: '', code: '', fullName: '', gender: '', dob: '', phone: '' },
-  )
+  const [patientDraft, setPatientDraft] = useState(() => ({
+    id: '',
+    code: '',
+    fullName: '',
+    gender: '',
+    dob: '',
+    phone: '',
+    address: '',
+    email: '',
+    citizenId: '',
+  }))
   const [patientModalOpen, setPatientModalOpen] = useState(false)
   const [patientModalDraft, setPatientModalDraft] = useState(() => ({
-    fullName: patients[0]?.fullName || '',
-    phone: patients[0]?.phone || '',
-    dob: patients[0]?.dob || '',
-    gender: patients[0]?.gender || 'Nam',
+    fullName: '',
+    phone: '',
+    dob: '',
+    gender: 'Nam',
     province: '',
     district: '',
     ward: '',
@@ -252,6 +247,62 @@ export default function Appointment() {
       navigate('/login', { replace: true })
       return
     }
+
+    // Load patient profile from Mongo via /api/auth/me
+    ;(async () => {
+      try {
+        const data = await getMe({ token })
+        const me = data?.user
+        if (!me) return
+
+        const fullName =
+          String(
+            me.displayName ||
+              [me.lastName, me.firstName].filter(Boolean).join(' ').trim() ||
+              '',
+          ).trim() || String(me.email || '').trim()
+
+        const genderLabel =
+          me.gender === true ? 'Nam' : me.gender === false ? 'Nữ' : String(me.gender || '').trim() || 'Nam'
+
+        const dobLabel = me.dob ? formatDateVi(me.dob) : ''
+        const phone = String(me.phone || '').trim()
+        const address = String(me.address || '').trim()
+        const code = buildPatientCode(me.id)
+
+        setPatientDraft({
+          id: String(me.id || ''),
+          code,
+          fullName,
+          gender: genderLabel,
+          dob: dobLabel,
+          phone,
+          address,
+          email: String(me.email || '').trim(),
+          citizenId: String(me.citizenId || '').trim(),
+        })
+
+        setPatientModalDraft((d) => ({
+          ...d,
+          fullName,
+          phone,
+          dob: dobLabel,
+          gender: genderLabel || 'Nam',
+          addressLine: address,
+          idCard: String(me.citizenId || '').trim(),
+          email: String(me.email || '').trim(),
+        }))
+
+        // Update stored user so other screens can show patient info consistently
+        const storage = localStorage.getItem('token') ? localStorage : sessionStorage
+        const existingRaw = storage.getItem('user')
+        const existing = safeParse(existingRaw || 'null') || {}
+        storage.setItem('user', JSON.stringify({ ...existing, ...me }))
+      } catch {
+        // ignore: booking can still proceed without extra patient fields
+      }
+    })()
+
     listDoctors()
       .then((docs) => {
         setDoctors(docs)
@@ -386,25 +437,48 @@ export default function Appointment() {
   const [disabledStarts, setDisabledStarts] = useState(() => new Set())
   const [availabilityLoading, setAvailabilityLoading] = useState(false)
   const [availabilityError, setAvailabilityError] = useState('')
+  const [availabilityByDate, setAvailabilityByDate] = useState(() => ({}))
 
   useEffect(() => {
     if (!token || !user) return
-    if (!doctorId || !appointmentDate) return
+    if (!doctorId || !upcomingDays.length) return
 
     let mounted = true
     setAvailabilityLoading(true)
     setAvailabilityError('')
 
-    getAvailability({ token, doctorId, date: appointmentDate })
-      .then((data) => {
+    // Fetch availability for all visible days so "Đã đầy lịch / còn X khung giờ"
+    // is derived from real backend data (not random/demo).
+    Promise.all(
+      upcomingDays.map(async (d) => {
+        const iso = d.iso
+        try {
+          const data = await getAvailability({ token, doctorId, date: iso })
+          const booked = (data?.bookedStartTimes || [])
+            .map((s) => String(s || '').trim())
+            .filter(Boolean)
+          return { iso, booked, ok: true }
+        } catch (err) {
+          return { iso, booked: [], ok: false, error: err?.message || 'Không tải được khung giờ.' }
+        }
+      }),
+    )
+      .then((rows) => {
         if (!mounted) return
-        const booked = (data?.bookedStartTimes || []).map((s) => String(s || '').trim()).filter(Boolean)
-        setDisabledStarts(new Set(booked))
+        const next = {}
+        for (const r of rows) {
+          next[r.iso] = {
+            booked: new Set(r.booked || []),
+            ok: r.ok !== false,
+            error: r.ok === false ? r.error : '',
+          }
+        }
+        setAvailabilityByDate(next)
       })
       .catch((err) => {
         if (!mounted) return
+        setAvailabilityByDate({})
         setAvailabilityError(err?.message || 'Không tải được khung giờ.')
-        setDisabledStarts(new Set())
       })
       .finally(() => {
         if (!mounted) return
@@ -414,7 +488,18 @@ export default function Appointment() {
     return () => {
       mounted = false
     }
-  }, [token, user, doctorId, appointmentDate])
+  }, [token, user, doctorId, upcomingDays])
+
+  // Keep disabled slots in sync with the currently selected date (from the preloaded map).
+  useEffect(() => {
+    if (!appointmentDate) return
+    const booked = availabilityByDate?.[appointmentDate]?.booked
+    if (booked instanceof Set) {
+      setDisabledStarts(new Set(booked))
+    } else {
+      setDisabledStarts(new Set())
+    }
+  }, [appointmentDate, availabilityByDate])
 
   const slotAvailability = useMemo(() => {
     const disabled = disabledStarts || new Set()
@@ -425,13 +510,20 @@ export default function Appointment() {
 
   const upcomingDaysWithMeta = useMemo(() => {
     return upcomingDays.map((d) => {
-      const seed = simpleSeedFromIso(`${doctorId || 'd'}:${d.iso}`)
-      const isFull = seed % 7 === 0
-      const disabledCount = isFull ? timeSlots.length : Math.min(10, 2 + (seed % 6))
-      const availableCount = Math.max(0, timeSlots.length - disabledCount)
-      return { ...d, isFull, availableCount }
+      const row = availabilityByDate?.[d.iso]
+      const booked = row?.booked instanceof Set ? row.booked : null
+      const bookedCount = booked ? booked.size : null
+      const availableCount =
+        bookedCount == null ? null : Math.max(0, timeSlots.length - bookedCount)
+      const isFull = availableCount != null ? availableCount <= 0 : false
+      return {
+        ...d,
+        isFull,
+        availableCount,
+        availabilityKnown: availableCount != null,
+      }
     })
-  }, [upcomingDays, doctorId, timeSlots.length])
+  }, [upcomingDays, availabilityByDate, timeSlots.length])
 
   // Keep selection valid when date changes or becomes unavailable
   useEffect(() => {
@@ -439,11 +531,6 @@ export default function Appointment() {
     const firstAvailable = timeSlots.find((s) => !slotAvailability.disabled.has(s.start))
     if (firstAvailable) setStartTime(firstAvailable.start)
   }, [appointmentDate, doctorId, slotAvailability.disabled, startTime, timeSlots])
-
-  useEffect(() => {
-    if (!selectedPatient) return
-    setPatientDraft({ ...selectedPatient })
-  }, [selectedPatient])
 
   useEffect(() => {
     if (!patientModalOpen) return
@@ -466,7 +553,7 @@ export default function Appointment() {
 
   async function handleConfirmBooking() {
     setBookingError('')
-    if (!token || !selectedDoctor || !selectedPatient) {
+    if (!token || !selectedDoctor || !patientDraft?.fullName) {
       setBookingError('Thiếu thông tin để đặt lịch.')
       return
     }
@@ -479,6 +566,35 @@ export default function Appointment() {
     }
     setBookingLoading(true)
     try {
+      // Front-end pre-check (backend also enforces these rules):
+      // - no overlapping time slot with another appointment
+      // - only one active appointment per doctor until completed/cancelled
+      const ACTIVE = new Set(['pending', 'confirmed'])
+      const my = await listMyAppointments({ token })
+      const sameSlot = (my || []).some((a) => {
+        const st = String(a?.status || '').toLowerCase()
+        if (!ACTIVE.has(st)) return false
+        const sameDate =
+          String(a?.appointmentDate || '').slice(0, 10) === String(appointmentDate || '').trim()
+        const sameStart = String(a?.startTime || '').trim() === String(startTime || '').trim()
+        return sameDate && sameStart
+      })
+      if (sameSlot) {
+        setBookingError('Bạn đã có lịch khám khác trùng khung giờ này. Vui lòng chọn giờ khác.')
+        return
+      }
+      const sameDoctorActive = (my || []).some((a) => {
+        const st = String(a?.status || '').toLowerCase()
+        if (!ACTIVE.has(st)) return false
+        return String(a?.doctorId || '').trim() === doctorIdToSend
+      })
+      if (sameDoctorActive) {
+        setBookingError(
+          'Bạn đã có một lịch khám đang chờ/xác nhận với bác sĩ này. Chỉ đặt lại sau khi lịch đó hoàn thành hoặc đã hủy.',
+        )
+        return
+      }
+
       const data = await createAppointment({
         token,
         doctorId: doctorIdToSend,
@@ -513,7 +629,7 @@ export default function Appointment() {
               fullName: patientDraft.fullName,
               dob: patientDraft.dob,
               gender: patientDraft.gender,
-              address: addressParts.join(', '),
+              address: addressParts.join(', ') || patientDraft.address || '',
             },
           },
         },
@@ -924,7 +1040,11 @@ export default function Appointment() {
                     >
                       <div className="appointment-date-chip-day">{day.label}</div>
                       <div className={`appointment-date-chip-sub ${day.isFull ? 'is-full' : ''}`}>
-                        {day.isFull ? 'Đã đầy lịch' : `${day.availableCount} khung giờ`}
+                        {!day.availabilityKnown || typeof day.availableCount !== 'number'
+                          ? '—'
+                          : day.isFull
+                            ? 'Đã đầy lịch'
+                            : `${day.availableCount} khung giờ`}
                       </div>
                     </button>
                   )
@@ -1037,7 +1157,7 @@ export default function Appointment() {
                         className="appointment-patient-val appointment-patient-code"
                         title="Mã do hệ thống cấp, không thể chỉnh sửa"
                       >
-                        {selectedPatient?.code || patientDraft.code}
+                      {patientDraft.code}
                       </div>
                     </div>
 

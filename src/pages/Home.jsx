@@ -409,10 +409,6 @@ export default function Landing() {
           aria-labelledby="sec-contact"
         >
           <h2 id="sec-contact">Liên hệ</h2>
-          <p>
-            Thông tin dưới đây là ví dụ cho demo — bạn có thể thay bằng địa chỉ,
-            số điện thoại và email thật của phòng khám trong báo cáo.
-          </p>
           <div className="landing-info-grid">
             <div className="landing-card">
               <dl className="landing-dl">
