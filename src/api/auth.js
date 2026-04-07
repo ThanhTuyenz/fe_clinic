@@ -24,6 +24,19 @@ export async function register({ firstName, lastName, email, phone, password }) 
   return data
 }
 
+export async function startRegister({ email }) {
+  const res = await fetch(`${base}/api/auth/start-register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Gửi OTP thất bại.')
+  }
+  return data
+}
+
 export async function verifyEmail({ verificationToken, otp }) {
   const res = await fetch(`${base}/api/auth/verify-email`, {
     method: 'POST',
@@ -33,6 +46,25 @@ export async function verifyEmail({ verificationToken, otp }) {
   const data = await parseJson(res)
   if (!res.ok) {
     throw new Error(data.message || 'Xác thực thất bại.')
+  }
+  return data
+}
+
+export async function completeRegister({
+  completeToken,
+  firstName,
+  lastName,
+  phone,
+  password,
+}) {
+  const res = await fetch(`${base}/api/auth/complete-register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ completeToken, firstName, lastName, phone, password }),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Hoàn tất đăng ký thất bại.')
   }
   return data
 }

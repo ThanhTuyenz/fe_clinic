@@ -142,6 +142,20 @@ export default function Landing() {
 
   const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
 
+  const featuredDepartments = useMemo(() => {
+    const map = new Map()
+    for (const d of doctors || []) {
+      const id = String(d?.deptID || '').trim()
+      const name = String(d?.deptName || '').trim()
+      if (!id || !name) continue
+      const prev = map.get(id)
+      map.set(id, prev ? { ...prev, count: prev.count + 1 } : { id, name, count: 1 })
+    }
+    return Array.from(map.values())
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'vi'))
+      .slice(0, 10)
+  }, [doctors])
+
   function logout() {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
@@ -311,6 +325,47 @@ export default function Landing() {
                       </Link>
                     </article>
                   ))}
+          </div>
+        </section>
+
+        <section className="landing-section landing-specialties" aria-labelledby="sec-specialties">
+          <div className="landing-booking-head landing-specialties-head">
+            <div>
+              <h2 id="sec-specialties">Khám theo chuyên khoa</h2>
+              <p className="landing-booking-sub">Chọn chuyên khoa để lọc nhanh danh sách bác sĩ phù hợp.</p>
+            </div>
+            <Link className="landing-more" to="/appointments">
+              Xem tất cả <span aria-hidden="true">›</span>
+            </Link>
+          </div>
+
+          <div className="landing-specialty-grid" role="list" aria-label="Danh sách chuyên khoa">
+            {featuredDepartments.length ? (
+              featuredDepartments.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="landing-specialty-card"
+                  role="listitem"
+                  onClick={() => navigate('/appointments', { state: { deptId: s.id } })}
+                >
+                  <span className="landing-specialty-icon" aria-hidden="true">
+                    +
+                  </span>
+                  <span className="landing-specialty-meta">
+                    <span className="landing-specialty-name">{s.name}</span>
+                    <span className="landing-specialty-count">{s.count} bác sĩ</span>
+                  </span>
+                  <span className="landing-specialty-cta" aria-hidden="true">
+                    Chọn <span aria-hidden="true">›</span>
+                  </span>
+                </button>
+              ))
+            ) : (
+              <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
+                Chưa có dữ liệu chuyên khoa.
+              </div>
+            )}
           </div>
         </section>
 

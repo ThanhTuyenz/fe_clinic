@@ -340,6 +340,88 @@
   text-decoration: none;
 }
 
+.landing-specialties {
+  margin-top: 2.2rem;
+}
+
+.landing-specialties-head .landing-booking-sub {
+  max-width: none;
+}
+
+.landing-specialty-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.landing-specialty-card {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 14px 12px;
+  box-shadow: 0 12px 30px rgba(2, 132, 199, 0.06);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.landing-specialty-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(2, 132, 199, 0.35);
+  box-shadow: 0 16px 40px rgba(2, 132, 199, 0.10);
+}
+
+.landing-specialty-card:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.landing-specialty-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 950;
+  color: rgba(2, 132, 199, 0.95);
+  background: rgba(2, 132, 199, 0.10);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  flex: 0 0 auto;
+}
+
+.landing-specialty-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.landing-specialty-name {
+  font-weight: 950;
+  color: var(--text-heading);
+  line-height: 1.15;
+}
+
+.landing-specialty-count {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.landing-specialty-cta {
+  flex: 0 0 auto;
+  color: var(--text-heading);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .landing-section {
   margin-top: 2.75rem;
   scroll-margin-top: 72px;
@@ -493,7 +575,17 @@
     flex-direction: column;
   }
 
+  .landing-specialty-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+
   .landing-expert-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 641px) and (max-width: 980px) {
+  .landing-specialty-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

@@ -189,6 +189,7 @@ export default function Appointment() {
   const location = useLocation()
   const { token, user } = useMemo(() => getSession(), [])
   const requestedDoctorId = location.state?.doctorId
+  const requestedDeptId = location.state?.deptId
 
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
@@ -306,6 +307,9 @@ export default function Appointment() {
     listDoctors()
       .then((docs) => {
         setDoctors(docs)
+        if (requestedDeptId && docs?.some((d) => String(d?.deptID || '').trim() === String(requestedDeptId).trim())) {
+          setActiveDeptId(String(requestedDeptId).trim())
+        }
         const resolvedId =
           requestedDoctorId && docs?.some((d) => d?.id === requestedDoctorId)
             ? requestedDoctorId
@@ -319,7 +323,7 @@ export default function Appointment() {
       })
       .catch((err) => setDoctorLoadError(err.message || 'Không tải được bác sĩ.'))
       .finally(() => setLoadingDoctors(false))
-  }, [token, user, navigate, requestedDoctorId])
+  }, [token, user, navigate, requestedDoctorId, requestedDeptId])
 
   function handleOpenDoctorDetail(nextId) {
     setDoctorId(nextId)
