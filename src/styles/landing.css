@@ -191,12 +191,213 @@
   margin-top: 1.6rem;
 }
 
+.landing-search {
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.04);
+  width: 100%;
+}
+
+.landing-search:focus-within {
+  border-color: rgba(2, 132, 199, 0.45);
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.12), 0 10px 22px rgba(2, 6, 23, 0.04);
+}
+
+.landing-search-icon {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 132, 199, 0.10);
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  color: rgba(2, 132, 199, 0.95);
+  font-weight: 950;
+  user-select: none;
+}
+
+.landing-search-input {
+  width: 100%;
+  min-width: 180px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-heading);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.landing-search-input::placeholder {
+  color: rgba(100, 116, 139, 0.9);
+  font-weight: 650;
+}
+
+.landing-search-clear {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.95);
+  color: var(--muted);
+  font-size: 1.15rem;
+  font-weight: 900;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.landing-search-clear:hover {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.22);
+  color: rgba(2, 132, 199, 0.95);
+}
+
+.landing-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+.landing-modal {
+  width: min(720px, 100%);
+  background: rgba(248, 250, 252, 0.98);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(2, 6, 23, 0.25);
+  padding: 14px;
+}
+
+.landing-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.landing-modal-title {
+  font-weight: 950;
+  color: var(--text-heading);
+  font-size: 1.05rem;
+}
+
+.landing-modal-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.landing-modal-close:hover {
+  background: rgba(2, 132, 199, 0.08);
+  border-color: rgba(2, 132, 199, 0.22);
+  color: rgba(2, 132, 199, 0.95);
+}
+
+.landing-modal-sub {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.landing-modal-error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(185, 28, 28, 0.95);
+  font-weight: 750;
+}
+
+.landing-modal-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.landing-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.landing-modal-field--full {
+  grid-column: 1 / -1;
+}
+
+.landing-modal-field label {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-heading);
+}
+
+.landing-modal-field input,
+.landing-modal-field select {
+  padding: 0.7rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  outline: none;
+  color: var(--text-heading);
+  font-weight: 650;
+}
+
+.landing-modal-field input:focus,
+.landing-modal-field select:focus {
+  border-color: rgba(2, 132, 199, 0.45);
+  box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.12);
+}
+
+.landing-modal-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.landing-modal-save {
+  appearance: none;
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  background: rgba(2, 132, 199, 0.95);
+  color: #fff;
+  font-weight: 950;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.landing-modal-save:hover {
+  background: rgba(3, 105, 161, 0.98);
+}
+
 .landing-booking-head {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .landing-booking-head h2 {
@@ -573,6 +774,16 @@
   .landing-booking-head {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .landing-search {
+    border-radius: 14px;
+    max-width: none;
+    width: 100%;
+  }
+
+  .landing-modal-grid {
+    grid-template-columns: 1fr;
   }
 
   .landing-specialty-grid {

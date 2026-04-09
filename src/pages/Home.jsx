@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { updateMe } from '../api/auth.js'
 import { listDoctors } from '../api/doctors.js'
 import logo from '../assets/logo.png'
 import banner from '../assets/Banner.jpg'
@@ -115,6 +116,117 @@ export default function Landing() {
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [doctorError, setDoctorError] = useState('')
+  const [doctorQuery, setDoctorQuery] = useState('')
+
+  const [patientInfoModalOpen, setPatientInfoModalOpen] = useState(false)
+  const [patientInfoError, setPatientInfoError] = useState('')
+  const [patientInfoDraft, setPatientInfoDraft] = useState(() => ({
+    dob: '',
+    ethnicity: 'Kinh',
+    gender: 'Nam',
+    citizenId: '',
+    addressLine: '',
+  }))
+  const [pendingBookingState, setPendingBookingState] = useState(null)
+
+  function getStorageForUser() {
+    return localStorage.getItem('token') ? localStorage : sessionStorage
+  }
+
+  function normalizeGenderLabel(value) {
+    const s = String(value || '').trim().toLowerCase()
+    if (!s) return 'Nam'
+    if (s === 'true' || s === 'nam' || s === 'male' || s === 'm') return 'Nam'
+    if (s === 'false' || s === 'nữ' || s === 'nu' || s === 'female' || s === 'f') return 'Nữ'
+    return 'Khác'
+  }
+
+  function openPatientInfoModal(nextState) {
+    setPatientInfoError('')
+    setPendingBookingState(nextState || null)
+    const u = getStoredUser() || {}
+    setPatientInfoDraft({
+      dob: String(u?.dob || '').slice(0, 10),
+      ethnicity: String(u?.ethnicity || '').trim() || 'Kinh',
+      gender: normalizeGenderLabel(u?.gender),
+      citizenId: String(u?.citizenId || u?.cccd || u?.idCard || '').trim(),
+      addressLine: String(u?.address || u?.addressLine || '').trim(),
+    })
+    setPatientInfoModalOpen(true)
+  }
+
+  function closePatientInfoModal() {
+    setPatientInfoModalOpen(false)
+    setPatientInfoError('')
+    setPendingBookingState(null)
+  }
+
+  function isPatientInfoComplete(u) {
+    const dob = String(u?.dob || '').trim()
+    const ethnicity = String(u?.ethnicity || '').trim()
+    const citizenId = String(u?.citizenId || '').trim()
+    const address = String(u?.address || '').trim()
+    const gender = String(u?.gender ?? '').trim()
+    return Boolean(dob && ethnicity && gender && citizenId && address)
+  }
+
+  function handleBookClick(state = {}) {
+    if (!user) {
+      navigate('/login', { replace: false, state: { message: 'Vui lòng đăng nhập để đặt lịch khám.' } })
+      return
+    }
+    if (!isPatientInfoComplete(user)) {
+      openPatientInfoModal(state)
+      return
+    }
+    navigate('/appointments', { state })
+  }
+
+  async function savePatientInfo() {
+    setPatientInfoError('')
+    const dob = String(patientInfoDraft.dob || '').trim()
+    const ethnicity = String(patientInfoDraft.ethnicity || '').trim()
+    const gender = String(patientInfoDraft.gender || '').trim()
+    const citizenId = String(patientInfoDraft.citizenId || '').trim()
+    const addressLine = String(patientInfoDraft.addressLine || '').trim()
+
+    if (!dob || !ethnicity || !gender || !citizenId || !addressLine) {
+      setPatientInfoError('Vui lòng nhập đầy đủ: ngày sinh, dân tộc, giới tính, số CCCD, địa chỉ cụ thể.')
+      return
+    }
+
+    const storage = getStorageForUser()
+    const token = storage.getItem('token')
+    if (!token) {
+      setPatientInfoError('Bạn cần đăng nhập lại để cập nhật hồ sơ.')
+      return
+    }
+
+    const genderToSend = gender === 'Nam' ? true : gender === 'Nữ' ? false : gender
+    try {
+      const data = await updateMe({
+        token,
+        payload: {
+          dob,
+          ethnicity,
+          citizenId,
+          address: addressLine,
+          gender: genderToSend,
+        },
+      })
+      const updatedUser = data?.user || data?.data?.user || null
+      if (!updatedUser) {
+        throw new Error('Máy chủ không trả về dữ liệu hồ sơ sau khi cập nhật.')
+      }
+      storage.setItem('user', JSON.stringify(updatedUser))
+      setPatientInfoModalOpen(false)
+      const state = pendingBookingState || {}
+      setPendingBookingState(null)
+      navigate('/appointments', { state })
+    } catch (err) {
+      setPatientInfoError(err?.message || 'Không lưu được hồ sơ lên máy chủ.')
+    }
+  }
 
   useEffect(() => {
     let mounted = true
@@ -141,6 +253,27 @@ export default function Landing() {
   }, [])
 
   const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
+
+  const normalizedDoctorQuery = useMemo(() => String(doctorQuery || '').trim().toLowerCase(), [doctorQuery])
+
+  const visibleDoctors = useMemo(() => {
+    if (!normalizedDoctorQuery) return featuredDoctors
+    const q = normalizedDoctorQuery
+    return featuredDoctors.filter((d) => {
+      const name = String(getDoctorFullName(d) || '').toLowerCase()
+      const rankName = String(getDoctorRankName(d) || '').toLowerCase()
+      const specialty = String(getDoctorCardSpecialty(d) || '').toLowerCase()
+      const dept = String(d?.deptName || '').toLowerCase()
+      const email = String(d?.email || '').toLowerCase()
+      return (
+        name.includes(q) ||
+        rankName.includes(q) ||
+        specialty.includes(q) ||
+        dept.includes(q) ||
+        email.includes(q)
+      )
+    })
+  }, [featuredDoctors, normalizedDoctorQuery])
 
   const featuredDepartments = useMemo(() => {
     const map = new Map()
@@ -227,9 +360,13 @@ export default function Landing() {
           </p>
           <div className="landing-hero-cta">
             {user ? (
-              <Link className="landing-btn landing-btn--solid" to="/appointments">
+              <button
+                type="button"
+                className="landing-btn landing-btn--solid"
+                onClick={() => handleBookClick({})}
+              >
                 Đặt lịch khám
-              </Link>
+              </button>
             ) : (
               <>
                 <Link className="landing-btn landing-btn--solid" to="/register">
@@ -244,6 +381,31 @@ export default function Landing() {
         </section>
 
         <section className="landing-booking" aria-labelledby="sec-booking">
+          <div className="landing-search" role="search" aria-label="Tìm bác sĩ">
+            <span className="landing-search-icon" aria-hidden="true">
+              ⌕
+            </span>
+            <input
+              className="landing-search-input"
+              type="search"
+              value={doctorQuery}
+              onChange={(e) => setDoctorQuery(e.target.value)}
+              placeholder="Tìm theo tên bác sĩ, chuyên khoa, khoa..."
+              aria-label="Tìm bác sĩ theo tên, chuyên khoa, khoa"
+              autoComplete="off"
+            />
+            {doctorQuery ? (
+              <button
+                type="button"
+                className="landing-search-clear"
+                onClick={() => setDoctorQuery('')}
+                aria-label="Xóa tìm kiếm"
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+
           <div className="landing-booking-head">
             <div>
               <h2 id="sec-booking">Đặt lịch khám trực tuyến</h2>
@@ -279,52 +441,60 @@ export default function Landing() {
                       {doctorError}
                     </div>
                   )
-                : featuredDoctors.map((d) => (
-                    <article
-                      className="landing-doctor-card"
-                      role="listitem"
-                      key={d.id || d.email || getDoctorFullName(d)}
-                      tabIndex={0}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => {
-                        navigate('/appointments', { state: { doctorId: d.id } })
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate('/appointments', { state: { doctorId: d.id } })
-                        }
-                      }}
-                    >
-                      <div className="landing-doctor-avatar" aria-hidden="true">
-                        <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
-                        {getDoctorAvatarSrc(d) ? (
-                          <img
-                            className="landing-avatar-img"
-                            src={getDoctorAvatarSrc(d)}
-                            alt=""
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        ) : null}
-                      </div>
-                      <div className="landing-doctor-name">{getDoctorRankName(d)}</div>
-                      <div className="landing-doctor-meta">
-                        <div className="landing-doctor-spec">{getDoctorCardSpecialty(d)}</div>
-                        <div className="landing-doctor-hospital">{getDoctorCardExperience(d)}</div>
-                      </div>
-                      <Link
-                        className="landing-doctor-action"
-                        to="/appointments"
-                        onClick={(e) => e.stopPropagation()}
-                        state={{ doctorId: d.id }}
+                : visibleDoctors.length ? (
+                    visibleDoctors.map((d) => (
+                      <article
+                        className="landing-doctor-card"
+                        role="listitem"
+                        key={d.id || d.email || getDoctorFullName(d)}
+                        tabIndex={0}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          handleBookClick({ doctorId: d.id })
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleBookClick({ doctorId: d.id })
+                          }
+                        }}
                       >
-                        Đặt lịch khám <span aria-hidden="true">›</span>
-                      </Link>
-                    </article>
-                  ))}
+                        <div className="landing-doctor-avatar" aria-hidden="true">
+                          <span className="landing-avatar-fallback">{getDoctorInitials(d)}</span>
+                          {getDoctorAvatarSrc(d) ? (
+                            <img
+                              className="landing-avatar-img"
+                              src={getDoctorAvatarSrc(d)}
+                              alt=""
+                              loading="lazy"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none'
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                        <div className="landing-doctor-name">{getDoctorRankName(d)}</div>
+                        <div className="landing-doctor-meta">
+                          <div className="landing-doctor-spec">{getDoctorCardSpecialty(d)}</div>
+                          <div className="landing-doctor-hospital">{getDoctorCardExperience(d)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="landing-doctor-action"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleBookClick({ doctorId: d.id })
+                          }}
+                        >
+                          Đặt lịch khám <span aria-hidden="true">›</span>
+                        </button>
+                      </article>
+                    ))
+                  ) : (
+                    <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
+                      Không tìm thấy bác sĩ phù hợp.
+                    </div>
+                  )}
           </div>
         </section>
 
@@ -488,6 +658,99 @@ export default function Landing() {
           </div>
         </section>
       </main>
+
+      {patientInfoModalOpen ? (
+        <div
+          className="landing-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bổ sung hồ sơ bệnh nhân"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closePatientInfoModal()
+          }}
+        >
+          <div className="landing-modal">
+            <div className="landing-modal-head">
+              <div className="landing-modal-title">Bổ sung hồ sơ bệnh nhân</div>
+              <button type="button" className="landing-modal-close" onClick={closePatientInfoModal} aria-label="Đóng">
+                ×
+              </button>
+            </div>
+
+            <p className="landing-modal-sub">
+              Để tiếp tục đặt lịch khám, vui lòng nhập thêm thông tin bắt buộc.
+            </p>
+
+            {patientInfoError ? (
+              <div className="landing-modal-error" role="alert">
+                {patientInfoError}
+              </div>
+            ) : null}
+
+            <div className="landing-modal-grid">
+              <div className="landing-modal-field">
+                <label htmlFor="pi-dob">Ngày sinh *</label>
+                <input
+                  id="pi-dob"
+                  type="date"
+                  value={patientInfoDraft.dob}
+                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, dob: e.target.value }))}
+                />
+              </div>
+
+              <div className="landing-modal-field">
+                <label htmlFor="pi-ethnicity">Dân tộc *</label>
+                <input
+                  id="pi-ethnicity"
+                  value={patientInfoDraft.ethnicity}
+                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, ethnicity: e.target.value }))}
+                  placeholder="vd: Kinh"
+                />
+              </div>
+
+              <div className="landing-modal-field">
+                <label htmlFor="pi-gender">Giới tính *</label>
+                <select
+                  id="pi-gender"
+                  value={patientInfoDraft.gender}
+                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, gender: e.target.value }))}
+                >
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                  <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              <div className="landing-modal-field">
+                <label htmlFor="pi-cccd">Số CCCD *</label>
+                <input
+                  id="pi-cccd"
+                  inputMode="numeric"
+                  value={patientInfoDraft.citizenId}
+                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, citizenId: e.target.value }))}
+                  placeholder="12 số"
+                />
+              </div>
+
+              <div className="landing-modal-field landing-modal-field--full">
+                <label htmlFor="pi-address">Địa chỉ cụ thể *</label>
+                <input
+                  id="pi-address"
+                  value={patientInfoDraft.addressLine}
+                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, addressLine: e.target.value }))}
+                  placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành"
+                />
+              </div>
+            </div>
+
+            <div className="landing-modal-actions">
+              <button type="button" className="landing-modal-save" onClick={savePatientInfo}>
+                Lưu &amp; tiếp tục
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <footer className="landing-footer">
         <p>

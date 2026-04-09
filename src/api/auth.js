@@ -113,3 +113,19 @@ export async function getMe({ token }) {
   }
   return data
 }
+
+export async function updateMe({ token, payload }) {
+  const res = await fetch(`${base}/api/auth/me`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload || {}),
+  })
+  const data = await parseJson(res)
+  if (!res.ok) {
+    throw new Error(data.message || 'Không cập nhật được hồ sơ bệnh nhân.')
+  }
+  return data
+}
