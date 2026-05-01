@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { cancelAppointment, listMyAppointments } from '../api/appointments.js'
+import { DEFAULT_SLOT_MINUTES as SLOT_MINUTES } from '../utils/appointmentExpiry.js'
 import logo from '../assets/logo.png'
 import '../styles/landing.css'
 import '../styles/my-appointments.css'
@@ -81,7 +82,7 @@ function getDoctorName(doc) {
   if (!doc) return '—'
   const first = String(doc?.firstName || '').trim()
   const last = String(doc?.lastName || '').trim()
-  const full = `${first} ${last}`.trim()
+  const full = `${last} ${first}`.trim()
   return (
     full ||
     String(doc?.displayName || doc?.fullName || '').trim() ||
@@ -136,10 +137,9 @@ function formatUserGender(user) {
   return '—'
 }
 
-const SLOT_MINUTES = 12
-
 export default function MyAppointments() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { token, user } = useMemo(() => getSession(), [])
 
   const [items, setItems] = useState([])
@@ -149,6 +149,13 @@ export default function MyAppointments() {
   const [selectedId, setSelectedId] = useState(null)
   const [cancelling, setCancelling] = useState(false)
   const [cancelErr, setCancelErr] = useState('')
+  const [toastVisible, setToastVisible] = useState(() => Boolean(location.state?.showSuccessToast))
+
+  useEffect(() => {
+    if (!toastVisible) return undefined
+    const t = setTimeout(() => setToastVisible(false), 3200)
+    return () => clearTimeout(t)
+  }, [toastVisible])
 
   useEffect(() => {
     if (!token || !user) {
@@ -156,13 +163,17 @@ export default function MyAppointments() {
       return
     }
 
+    const highlightId = location.state?.highlightId ? String(location.state.highlightId) : ''
     let mounted = true
     setLoading(true)
     setError('')
     listMyAppointments({ token })
       .then((rows) => {
         if (!mounted) return
-        setItems(rows || [])
+        const next = rows || []
+        if (!mounted) return
+        setItems(next)
+        if (highlightId) setSelectedId(highlightId)
       })
       .catch((err) => {
         if (!mounted) return
@@ -176,7 +187,7 @@ export default function MyAppointments() {
     return () => {
       mounted = false
     }
-  }, [token, user, navigate])
+  }, [token, user, navigate, location.state?.highlightId])
 
   const filtered = useMemo(() => {
     const q = String(searchQuery || '')
@@ -241,7 +252,6 @@ export default function MyAppointments() {
       ? String(selected.endTime).trim()
       : addMinutesToHHmm(start, SLOT_MINUTES)
     const ticket = buildTicketCode(selected.id, selected.appointmentDate)
-    const stt = queueNumberFromId(selected.id)
     const timeLine = `${start}-${end} (${periodLabel(start)})`
     const avatar = normalizeAvatarUrl(doctor?.avatarUrl)
     const dept = String(doctor?.deptName || '').trim()
@@ -258,7 +268,6 @@ export default function MyAppointments() {
       start,
       end,
       ticket,
-      stt,
       timeLine,
       avatar,
       doctorName: getDoctorName(doctor),
@@ -277,6 +286,7 @@ export default function MyAppointments() {
 
   return (
     <div className="myappt-page">
+      {toastVisible ? <div className="apdetail-toast">Đặt lịch thành công!</div> : null}
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
           <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
@@ -348,14 +358,12 @@ export default function MyAppointments() {
                     const st = statusLabel(a.status)
                     const doctor = a?.doctor
                     const doctorName = getDoctorName(doctor)
-                    const stt = queueNumberFromId(a.id)
                     const start = String(a.startTime || '').trim()
                     const end = a.endTime
                       ? String(a.endTime).trim()
                       : addMinutesToHHmm(start, SLOT_MINUTES)
                     const patientLine = user?.displayName || user?.fullName || 'Bệnh nhân'
                     const isActive = selected && String(selected.id) === String(a.id)
-                    const isCancelled = String(a.status || '').toLowerCase() === 'cancelled'
                     return (
                       <button
                         key={a.id}
@@ -372,12 +380,6 @@ export default function MyAppointments() {
                         </div>
                         <div className="myappt-listcard-side">
                           <span className={`myappt-pill myappt-pill--${st.tone}`}>{st.text}</span>
-                          <div
-                            className={`myappt-stt-badge${isCancelled ? ' myappt-stt-badge--cancelled' : ''}`}
-                            aria-label={`STT ${stt}`}
-                          >
-                            {stt}
-                          </div>
                         </div>
                       </button>
                     )
@@ -392,11 +394,6 @@ export default function MyAppointments() {
               {detailView && selected ? (
                 <>
                   <div className="myappt-detail-top">
-                    <div
-                      className={`myappt-detail-stt${detailView.cancelled ? ' myappt-detail-stt--cancelled' : ''}`}
-                    >
-                      STT: {detailView.stt}
-                    </div>
                     <div className="myappt-detail-status">
                       {!detailView.cancelled ? (
                         <span className="myappt-status-icon" aria-hidden="true">

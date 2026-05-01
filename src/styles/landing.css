@@ -391,6 +391,11 @@
   background: rgba(3, 105, 161, 0.98);
 }
 
+.landing-modal-save:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .landing-booking-head {
   display: flex;
   align-items: center;
@@ -526,19 +531,51 @@
 
 .landing-doctor-action {
   margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  width: 100%;
+  appearance: none;
+  border: 1px solid rgba(2, 132, 199, 0.18);
+  background: rgba(2, 132, 199, 0.10);
+  border-radius: 12px;
+  padding: 0.65rem 0.8rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: var(--text-heading);
+  gap: 10px;
+  color: rgba(2, 132, 199, 0.98);
   font-weight: 900;
   text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease,
+    color 0.12s ease;
+}
+
+.landing-doctor-action-arrow {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(2, 132, 199, 0.20);
+  color: rgba(2, 132, 199, 0.98);
+  font-weight: 950;
+  line-height: 1;
 }
 
 .landing-doctor-action:hover {
-  color: var(--clinic-primary-dark);
+  transform: translateY(-1px);
+  background: rgba(2, 132, 199, 0.14);
+  border-color: rgba(2, 132, 199, 0.28);
+  box-shadow: 0 14px 34px rgba(2, 132, 199, 0.14);
+  color: rgba(3, 105, 161, 0.98);
   text-decoration: none;
+}
+
+.landing-doctor-action:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
 }
 
 .landing-specialties {
@@ -571,6 +608,17 @@
   transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
+.landing-specialty-card.is-active {
+  border-color: rgba(2, 132, 199, 0.55);
+  box-shadow: 0 16px 44px rgba(2, 132, 199, 0.14);
+  transform: translateY(-1px);
+}
+
+.landing-specialty-card.is-active .landing-specialty-icon {
+  background: rgba(2, 132, 199, 0.16);
+  border-color: rgba(2, 132, 199, 0.30);
+}
+
 .landing-specialty-card:hover {
   transform: translateY(-1px);
   border-color: rgba(2, 132, 199, 0.35);
@@ -578,6 +626,49 @@
 }
 
 .landing-specialty-card:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.landing-filter-chip {
+  margin-top: 10px;
+  border: 1px solid rgba(2, 132, 199, 0.22);
+  background: rgba(2, 132, 199, 0.08);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 800;
+  color: rgba(3, 105, 161, 0.98);
+}
+
+.landing-filter-chip strong {
+  font-weight: 950;
+  color: var(--text-heading);
+}
+
+.landing-filter-chip-clear {
+  appearance: none;
+  border: 1px solid rgba(2, 132, 199, 0.26);
+  background: rgba(255, 255, 255, 0.9);
+  color: rgba(3, 105, 161, 0.98);
+  font-weight: 900;
+  border-radius: 12px;
+  padding: 8px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.landing-filter-chip-clear:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(2, 132, 199, 0.12);
+  border-color: rgba(2, 132, 199, 0.38);
+}
+
+.landing-filter-chip-clear:focus-visible {
   outline: 2px solid rgba(37, 99, 235, 0.35);
   outline-offset: 2px;
 }

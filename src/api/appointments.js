@@ -11,6 +11,13 @@ async function parseJson(res) {
   }
 }
 
+function httpError(message, res, data) {
+  const err = new Error(message || 'Yêu cầu thất bại.')
+  err.status = res?.status
+  err.data = data
+  return err
+}
+
 export async function createAppointment({ token, doctorId, appointmentDate, startTime, note }) {
   const res = await fetch(`${base}/api/appointments`, {
     method: 'POST',
@@ -19,6 +26,8 @@ export async function createAppointment({ token, doctorId, appointmentDate, star
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
+      source: 'online',
+      bookingSource: 'online',
       doctorId,
       appointmentDate,
       startTime,
@@ -28,7 +37,7 @@ export async function createAppointment({ token, doctorId, appointmentDate, star
 
   const data = await parseJson(res)
   if (!res.ok) {
-    throw new Error(data.message || 'Đặt lịch thất bại.')
+    throw httpError(data.message || 'Đặt lịch thất bại.', res, data)
   }
   return data
 }
@@ -44,7 +53,7 @@ export async function cancelAppointment({ token, appointmentId }) {
 
   const data = await parseJson(res)
   if (!res.ok) {
-    throw new Error(data.message || 'Không hủy được lịch khám.')
+    throw httpError(data.message || 'Không hủy được lịch khám.', res, data)
   }
   return data
 }
@@ -59,7 +68,7 @@ export async function listMyAppointments({ token }) {
 
   const data = await parseJson(res)
   if (!res.ok) {
-    throw new Error(data.message || 'Không lấy được lịch khám.')
+    throw httpError(data.message || 'Không lấy được lịch khám.', res, data)
   }
   return data?.appointments || []
 }
@@ -79,7 +88,7 @@ export async function getAvailability({ token, doctorId, date }) {
 
   const data = await parseJson(res)
   if (!res.ok) {
-    throw new Error(data.message || 'Không lấy được khung giờ.')
+    throw httpError(data.message || 'Không lấy được khung giờ.', res, data)
   }
   return data
 }

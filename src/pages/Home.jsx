@@ -9,7 +9,7 @@ import '../styles/landing.css'
 function getDoctorFullName(d) {
   const first = String(d?.firstName || '').trim()
   const last = String(d?.lastName || '').trim()
-  const full = `${first} ${last}`.trim()
+  const full = `${last} ${first}`.trim()
   return full || String(d?.displayName || '').trim() || d?.email || ''
 }
 
@@ -431,7 +431,7 @@ export default function Landing() {
                       <div className="landing-doctor-hospital">...</div>
                     </div>
                     <span className="landing-doctor-action" aria-hidden="true" style={{ opacity: 0.55 }}>
-                      Đặt lịch khám <span aria-hidden="true">›</span>
+                      Đặt lịch khám <span className="landing-doctor-action-arrow" aria-hidden="true">›</span>
                     </span>
                   </article>
                 ))
@@ -486,7 +486,7 @@ export default function Landing() {
                             handleBookClick({ doctorId: d.id })
                           }}
                         >
-                          Đặt lịch khám <span aria-hidden="true">›</span>
+                          Đặt lịch khám <span className="landing-doctor-action-arrow" aria-hidden="true">›</span>
                         </button>
                       </article>
                     ))

@@ -52,7 +52,7 @@ function getDoctorFullNameFromDoc(doc) {
   if (!doc) return ''
   const first = String(doc.firstName || '').trim()
   const last = String(doc.lastName || '').trim()
-  const full = `${first} ${last}`.trim()
+  const full = `${last} ${first}`.trim()
   return full || String(doc.displayName || '').trim() || doc.email || ''
 }
 
@@ -90,13 +90,6 @@ function buildTicketCode(appointmentId, appointmentDate) {
   return `YMA${yy}${mm}${dd}${suffix}`
 }
 
-function queueNumberFromId(id) {
-  const s = String(id).replace(/[^a-fA-F0-9]/g, '')
-  let n = 0
-  for (let i = 0; i < s.length; i += 1) n = (n * 31 + s.charCodeAt(i)) % 10000
-  return Math.max(1, (n % 99) + 1)
-}
-
 function periodLabel(startTime) {
   const [h] = String(startTime || '12:00')
     .split(':')
@@ -130,6 +123,7 @@ export default function AppointmentDetail() {
   useEffect(() => {
     if (!token || !user) {
       navigate('/login', { replace: true })
+      return
     }
   }, [token, user, navigate])
 
@@ -209,7 +203,6 @@ export default function AppointmentDetail() {
     const start = String(a.startTime || '').trim()
     const end = a.endTime ? String(a.endTime).trim() : addMinutesToHHmm(start, SLOT_MINUTES)
     const ticket = buildTicketCode(apptId, dateRaw)
-    const stt = queueNumberFromId(apptId)
     const doc = resolved.doctor
     const doctorName = doc
       ? getDoctorFullNameFromDoc(doc) || doc.displayName || '—'
@@ -224,7 +217,6 @@ export default function AppointmentDetail() {
 
     return {
       ticket,
-      stt,
       dateVi: formatDateVi(dateRaw),
       dateIso: formatIsoDateOnly(dateRaw),
       timeLine,
@@ -340,10 +332,6 @@ export default function AppointmentDetail() {
 
             <div className="apdetail-card apdetail-slip" id="phieu-kham">
               <div className="apdetail-stt-qr">
-                <div className="apdetail-stt-block">
-                  <div className="apdetail-label">STT</div>
-                  <div className="apdetail-stt-num">{view.stt}</div>
-                </div>
                 <div className="apdetail-qr">
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=128x128&data=${encodeURIComponent(view.ticket)}`}
@@ -374,10 +362,6 @@ export default function AppointmentDetail() {
                 <div className="apdetail-row">
                   <span className="apdetail-row-key">Mã phiếu khám</span>
                   <span className="apdetail-row-val">{view.ticket}</span>
-                </div>
-                <div className="apdetail-row">
-                  <span className="apdetail-row-key">STT</span>
-                  <span className="apdetail-row-val">{view.stt}</span>
                 </div>
                 <div className="apdetail-row">
                   <span className="apdetail-row-key">Ngày</span>
