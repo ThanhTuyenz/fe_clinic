@@ -1,6 +1,4 @@
-const base =
-  (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
-  'http://localhost:5000'
+import { getApiBase, parseJsonResponse } from './apiBase.js'
 
 const DEFAULT_DOCTOR_AVATAR =
   'https://sf-static.upanhlaylink.com/img/image_202603269925437b540c48178c53b73c88dd8146.jpg'
@@ -91,6 +89,7 @@ function normalizeDoctor(doctor) {
  * Chỉ trả các bản ghi có `id` là ObjectId hợp lệ để đặt lịch không gửi nhầm id demo.
  */
 export async function listDoctors() {
+  const base = getApiBase()
   let res
   try {
     res = await fetch(`${base}/api/doctors`, { method: 'GET' })
@@ -100,13 +99,7 @@ export async function listDoctors() {
     )
   }
 
-  const text = await res.text()
-  let data = {}
-  try {
-    data = text ? JSON.parse(text) : {}
-  } catch {
-    data = { message: text || 'Lỗi không xác định.' }
-  }
+  const data = await parseJsonResponse(res)
 
   if (!res.ok) {
     throw new Error(data.message || 'Không lấy được danh sách bác sĩ.')

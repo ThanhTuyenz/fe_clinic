@@ -1,17 +1,11 @@
-const base =
-  (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
-  'http://localhost:5000'
+import { getApiBase, parseJsonResponse } from './apiBase.js'
 
 async function parseJson(res) {
-  const text = await res.text()
-  try {
-    return text ? JSON.parse(text) : {}
-  } catch {
-    return { message: text || 'Lỗi không xác định.' }
-  }
+  return parseJsonResponse(res)
 }
 
 export async function register({ firstName, lastName, email, phone, password }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,6 +19,7 @@ export async function register({ firstName, lastName, email, phone, password }) 
 }
 
 export async function startRegister({ email }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/start-register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -38,6 +33,7 @@ export async function startRegister({ email }) {
 }
 
 export async function verifyEmail({ verificationToken, otp }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/verify-email`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -57,6 +53,7 @@ export async function completeRegister({
   phone,
   password,
 }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/complete-register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -70,6 +67,7 @@ export async function completeRegister({
 }
 
 export async function resendOtp({ email }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/resend-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -83,6 +81,7 @@ export async function resendOtp({ email }) {
 }
 
 export async function login({ email, password }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -101,6 +100,7 @@ export async function login({ email, password }) {
 }
 
 export async function getMe({ token }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/me`, {
     method: 'GET',
     headers: {
@@ -115,6 +115,7 @@ export async function getMe({ token }) {
 }
 
 export async function updateMe({ token, payload }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/auth/me`, {
     method: 'PATCH',
     headers: {

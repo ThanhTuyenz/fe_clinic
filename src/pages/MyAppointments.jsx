@@ -120,6 +120,38 @@ function statusLabel(status) {
   return { text: 'Chờ xác nhận', tone: 'pending' }
 }
 
+const CANCEL_REASON_PRESETS = [
+  { id: 'busy', label: 'Bận việc đột xuất, không đến khám được' },
+  { id: 'recovered', label: 'Đã khỏi bệnh / không cần khám nữa' },
+  { id: 'reschedule', label: 'Muốn đổi bác sĩ hoặc thời gian khác' },
+  { id: 'other', label: 'Lý do khác (ghi chú bên dưới)' },
+]
+
+function formatCancelledByLine(cancelledBy) {
+  if (!cancelledBy || typeof cancelledBy !== 'object') return '—'
+  const ut = String(cancelledBy.userType || '').toLowerCase()
+  const role = String(cancelledBy.role || '').toLowerCase()
+  if (role === 'system' || ut === 'system') return 'Hệ thống'
+  const isPatient = role === 'patient' || ut === 'patient'
+  const label = isPatient ? 'Bệnh nhân' : 'Phòng khám'
+  const name = String(cancelledBy.displayName || '').trim() || String(cancelledBy.email || '').trim()
+  return name ? `${label}: ${name}` : label
+}
+
+function formatCancelledAtVi(isoOrDate) {
+  if (!isoOrDate) return '—'
+  const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)
+  if (Number.isNaN(d.getTime())) return '—'
+  try {
+    return new Intl.DateTimeFormat('vi-VN', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(d)
+  } catch {
+    return d.toLocaleString('vi-VN')
+  }
+}
+
 function formatUserDob(user) {
   const raw = user?.dob
   if (!raw) return '—'
@@ -149,6 +181,9 @@ export default function MyAppointments() {
   const [selectedId, setSelectedId] = useState(null)
   const [cancelling, setCancelling] = useState(false)
   const [cancelErr, setCancelErr] = useState('')
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelPresetId, setCancelPresetId] = useState('busy')
+  const [cancelOtherText, setCancelOtherText] = useState('')
   const [toastVisible, setToastVisible] = useState(() => Boolean(location.state?.showSuccessToast))
 
   useEffect(() => {
@@ -196,7 +231,7 @@ export default function MyAppointments() {
     if (!q) return items
     return (items || []).filter((a) => {
       const doctor = getDoctorName(a?.doctor).toLowerCase()
-      const ticket = buildTicketCode(a.id, a.appointmentDate).toLowerCase()
+      const ticket = String(a?.ticket || buildTicketCode(a.id, a.appointmentDate)).toLowerCase()
       const patient = String(user?.displayName || user?.fullName || user?.email || '').toLowerCase()
       return doctor.includes(q) || ticket.includes(q) || patient.includes(q)
     })
@@ -223,19 +258,67 @@ export default function MyAppointments() {
     navigate('/landing', { replace: true })
   }
 
-  async function handleCancelAppointment() {
+  function openCancelModal() {
+    if (!selected || String(selected.status).toLowerCase() === 'cancelled') return
+    setCancelErr('')
+    setCancelPresetId('busy')
+    setCancelOtherText('')
+    setCancelModalOpen(true)
+  }
+
+  function closeCancelModal() {
+    if (cancelling) return
+    setCancelModalOpen(false)
+  }
+
+  function resolveCancelReasonText() {
+    const preset = CANCEL_REASON_PRESETS.find((p) => p.id === cancelPresetId)
+    if (cancelPresetId === 'other') {
+      return String(cancelOtherText || '').trim()
+    }
+    return preset ? preset.label : ''
+  }
+
+  async function confirmCancelAppointment() {
     if (!selected || !token) return
     if (String(selected.status).toLowerCase() === 'cancelled') return
+    const reasonText = resolveCancelReasonText()
+    if (!reasonText) {
+      setCancelErr(
+        cancelPresetId === 'other'
+          ? 'Vui lòng nhập lý do hủy.'
+          : 'Vui lòng chọn lý do hủy.',
+      )
+      return
+    }
     setCancelErr('')
-    if (!window.confirm('Bạn có chắc muốn hủy lịch khám này?')) return
     setCancelling(true)
     try {
-      await cancelAppointment({ token, appointmentId: String(selected.id) })
+      const data = await cancelAppointment({
+        token,
+        appointmentId: String(selected.id),
+        cancelReason: reasonText,
+      })
+      const ap = data?.appointment || {}
       setItems((prev) =>
         prev.map((x) =>
-          String(x.id) === String(selected.id) ? { ...x, status: 'cancelled' } : x,
+          String(x.id) === String(selected.id)
+            ? {
+                ...x,
+                status: 'cancelled',
+                cancelReason: ap.cancelReason ?? reasonText,
+                cancelledAt: ap.cancelledAt ?? new Date().toISOString(),
+                cancelledBy: ap.cancelledBy ?? {
+                  role: 'patient',
+                  displayName: user?.displayName || user?.fullName || user?.email || 'Bệnh nhân',
+                  email: user?.email || '',
+                  userType: 'patient',
+                },
+              }
+            : x,
         ),
       )
+      setCancelModalOpen(false)
     } catch (err) {
       setCancelErr(err?.message || 'Không hủy được lịch.')
     } finally {
@@ -251,7 +334,7 @@ export default function MyAppointments() {
     const end = selected.endTime
       ? String(selected.endTime).trim()
       : addMinutesToHHmm(start, SLOT_MINUTES)
-    const ticket = buildTicketCode(selected.id, selected.appointmentDate)
+    const ticket = String(selected?.ticket || buildTicketCode(selected.id, selected.appointmentDate))
     const timeLine = `${start}-${end} (${periodLabel(start)})`
     const avatar = normalizeAvatarUrl(doctor?.avatarUrl)
     const dept = String(doctor?.deptName || '').trim()
@@ -281,6 +364,9 @@ export default function MyAppointments() {
       address,
       dateVi: formatDateVi(selected.appointmentDate),
       cancelled: String(selected.status).toLowerCase() === 'cancelled',
+      cancelReason: String(selected.cancelReason || '').trim(),
+      cancelledByLine: formatCancelledByLine(selected.cancelledBy),
+      cancelledAtVi: formatCancelledAtVi(selected.cancelledAt),
     }
   }, [selected, user])
 
@@ -364,6 +450,8 @@ export default function MyAppointments() {
                       : addMinutesToHHmm(start, SLOT_MINUTES)
                     const patientLine = user?.displayName || user?.fullName || 'Bệnh nhân'
                     const isActive = selected && String(selected.id) === String(a.id)
+                    const isCancelled = String(a.status || '').toLowerCase() === 'cancelled'
+                    const cancelSnippet = String(a.cancelReason || '').trim()
                     return (
                       <button
                         key={a.id}
@@ -376,6 +464,19 @@ export default function MyAppointments() {
                           <div className="myappt-listcard-meta">
                             {start}-{end} · {formatDateVi(a.appointmentDate)}
                           </div>
+                          {isCancelled ? (
+                            <div className="myappt-listcard-cancel" title={cancelSnippet || undefined}>
+                              <span className="myappt-listcard-cancel-who">{formatCancelledByLine(a.cancelledBy)}</span>
+                              {cancelSnippet ? (
+                                <>
+                                  <span className="myappt-listcard-cancel-sep">·</span>
+                                  <span className="myappt-listcard-cancel-reason">
+                                    {cancelSnippet.length > 48 ? `${cancelSnippet.slice(0, 48)}…` : cancelSnippet}
+                                  </span>
+                                </>
+                              ) : null}
+                            </div>
+                          ) : null}
                           <div className="myappt-listcard-patient">{patientLine}</div>
                         </div>
                         <div className="myappt-listcard-side">
@@ -452,6 +553,26 @@ export default function MyAppointments() {
                     </div>
                   </div>
 
+                  {detailView.cancelled ? (
+                    <div className="myappt-block myappt-block--cancelled">
+                      <h2 className="myappt-block-title">Thông tin hủy lịch</h2>
+                      <div className="myappt-kv">
+                        <div className="myappt-kv-row">
+                          <span>Hủy bởi</span>
+                          <span>{detailView.cancelledByLine}</span>
+                        </div>
+                        <div className="myappt-kv-row">
+                          <span>Thời điểm hủy</span>
+                          <span>{detailView.cancelledAtVi}</span>
+                        </div>
+                        <div className="myappt-kv-row myappt-kv-row--multiline">
+                          <span>Lý do hủy</span>
+                          <span>{detailView.cancelReason || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="myappt-block">
                     <h2 className="myappt-block-title">Thông tin bệnh nhân</h2>
                     <div className="myappt-kv">
@@ -484,20 +605,14 @@ export default function MyAppointments() {
                     </div>
                   </div>
 
-                  {cancelErr ? (
-                    <div className="myappt-inline-err" role="alert">
-                      {cancelErr}
-                    </div>
-                  ) : null}
-
                   <div className="myappt-detail-actions">
                     <button
                       type="button"
                       className="myappt-btn myappt-btn--danger"
                       disabled={detailView.cancelled || cancelling}
-                      onClick={handleCancelAppointment}
+                      onClick={openCancelModal}
                     >
-                      {cancelling ? 'Đang hủy…' : 'Hủy lịch'}
+                      Hủy lịch
                     </button>
                   </div>
                 </>
@@ -513,6 +628,70 @@ export default function MyAppointments() {
           </div>
         )}
       </main>
+
+      {cancelModalOpen ? (
+        <div
+          className="myappt-modal-backdrop"
+          role="presentation"
+          onClick={closeCancelModal}
+          onKeyDown={(e) => e.key === 'Escape' && closeCancelModal()}
+        >
+          <div
+            className="myappt-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="myappt-cancel-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="myappt-cancel-title" className="myappt-modal-title">
+              Hủy lịch khám
+            </h2>
+            <p className="myappt-modal-desc">Vui lòng chọn lý do hủy để chúng tôi phục vụ bạn tốt hơn.</p>
+            <div className="myappt-cancel-reasons">
+              {CANCEL_REASON_PRESETS.map((p) => (
+                <label key={p.id} className="myappt-radio-row">
+                  <input
+                    type="radio"
+                    name="cancel-reason"
+                    value={p.id}
+                    checked={cancelPresetId === p.id}
+                    onChange={() => setCancelPresetId(p.id)}
+                  />
+                  <span>{p.label}</span>
+                </label>
+              ))}
+            </div>
+            {cancelPresetId === 'other' ? (
+              <textarea
+                className="myappt-cancel-textarea"
+                rows={3}
+                placeholder="Nhập lý do…"
+                value={cancelOtherText}
+                onChange={(e) => setCancelOtherText(e.target.value)}
+                maxLength={500}
+              />
+            ) : null}
+            {cancelErr ? (
+              <div className="myappt-inline-err myappt-modal-err" role="alert">
+                {cancelErr}
+              </div>
+            ) : null}
+            <div className="myappt-modal-actions">
+              <button type="button" className="myappt-btn myappt-btn--ghost" disabled={cancelling} onClick={closeCancelModal}>
+                Đóng
+              </button>
+              <button
+                type="button"
+                className="myappt-btn myappt-btn--danger"
+                disabled={cancelling}
+                onClick={confirmCancelAppointment}
+              >
+                {cancelling ? 'Đang hủy…' : 'Xác nhận hủy lịch'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

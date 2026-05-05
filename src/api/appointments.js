@@ -1,14 +1,7 @@
-const base =
-  (import.meta.env.VITE_API_URL && String(import.meta.env.VITE_API_URL).replace(/\/$/, '')) ||
-  'http://localhost:5000'
+import { getApiBase, parseJsonResponse } from './apiBase.js'
 
 async function parseJson(res) {
-  const text = await res.text()
-  try {
-    return text ? JSON.parse(text) : {}
-  } catch {
-    return { message: text || 'Lỗi không xác định.' }
-  }
+  return parseJsonResponse(res)
 }
 
 function httpError(message, res, data) {
@@ -19,6 +12,7 @@ function httpError(message, res, data) {
 }
 
 export async function createAppointment({ token, doctorId, appointmentDate, startTime, note }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/appointments`, {
     method: 'POST',
     headers: {
@@ -42,13 +36,18 @@ export async function createAppointment({ token, doctorId, appointmentDate, star
   return data
 }
 
-export async function cancelAppointment({ token, appointmentId }) {
+export async function cancelAppointment({ token, appointmentId, cancelReason }) {
+  const base = getApiBase()
   const id = String(appointmentId || '').trim()
   const res = await fetch(`${base}/api/appointments/${encodeURIComponent(id)}/cancel`, {
     method: 'PATCH',
     headers: {
+      'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify({
+      cancelReason: String(cancelReason || '').trim(),
+    }),
   })
 
   const data = await parseJson(res)
@@ -59,6 +58,7 @@ export async function cancelAppointment({ token, appointmentId }) {
 }
 
 export async function listMyAppointments({ token }) {
+  const base = getApiBase()
   const res = await fetch(`${base}/api/appointments/my`, {
     method: 'GET',
     headers: {
@@ -74,6 +74,7 @@ export async function listMyAppointments({ token }) {
 }
 
 export async function getAvailability({ token, doctorId, date }) {
+  const base = getApiBase()
   const qs = new URLSearchParams({
     doctorId: String(doctorId || '').trim(),
     date: String(date || '').trim(),

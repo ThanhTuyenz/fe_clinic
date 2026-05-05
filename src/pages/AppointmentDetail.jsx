@@ -202,7 +202,7 @@ export default function AppointmentDetail() {
     const dateRaw = a.appointmentDate
     const start = String(a.startTime || '').trim()
     const end = a.endTime ? String(a.endTime).trim() : addMinutesToHHmm(start, SLOT_MINUTES)
-    const ticket = buildTicketCode(apptId, dateRaw)
+    const ticket = String(a?.ticket || buildTicketCode(apptId, dateRaw))
     const doc = resolved.doctor
     const doctorName = doc
       ? getDoctorFullNameFromDoc(doc) || doc.displayName || '—'

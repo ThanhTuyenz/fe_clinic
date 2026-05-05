@@ -57,6 +57,13 @@ function parseDoctorSpecialty(bio) {
   return parseDoctorBio(bio).specialty || ''
 }
 
+function isDepartmentCodeLike(name) {
+  const s = String(name || '').trim()
+  if (!s) return false
+  // Common patterns returned by backend seeds: SPEC-001, DEPT_01, etc.
+  return /^(spec|dept)[-_]?\d+$/i.test(s)
+}
+
 function getDoctorCardSpecialty(d) {
   const s = String(d?.specialtyName || d?.specialty || '').trim() || parseDoctorSpecialty(d?.bio) || ''
   if (!s) return 'Chuyên khoa'
@@ -278,8 +285,22 @@ export default function Landing() {
   const featuredDepartments = useMemo(() => {
     const map = new Map()
     for (const d of doctors || []) {
-      const id = String(d?.deptID || '').trim()
-      const name = String(d?.deptName || '').trim()
+      let id = String(d?.deptID || '').trim()
+      let name = String(d?.deptName || '').trim()
+      if (isDepartmentCodeLike(name)) name = ''
+      if (!id || !name) {
+        const spec = String(d?.specialtyName || d?.specialty || '').trim()
+        if (spec && spec !== 'Chuyên khoa') {
+          name = spec
+          id = `dept-${spec
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 48)}`
+        }
+      }
       if (!id || !name) continue
       const prev = map.get(id)
       map.set(id, prev ? { ...prev, count: prev.count + 1 } : { id, name, count: 1 })
