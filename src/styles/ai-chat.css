@@ -1,0 +1,240 @@
+.aichat-page {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 10% 0%, rgba(23, 148, 134, 0.12), transparent 60%),
+    radial-gradient(900px 500px at 90% 10%, rgba(16, 91, 255, 0.08), transparent 60%),
+    #f7fafc;
+}
+
+.aichat-container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 22px 16px 34px;
+}
+
+.aichat-shell {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 16px;
+}
+
+.aichat-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+}
+
+.aichat-title {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #0f172a;
+}
+
+.aichat-sub {
+  margin-top: 4px;
+  color: rgba(15, 23, 42, 0.65);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.aichat-link {
+  align-self: center;
+  font-weight: 900;
+  color: #0f766e;
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  background: rgba(240, 253, 250, 0.9);
+}
+
+.aichat-link:hover {
+  filter: brightness(0.98);
+}
+
+.aichat-body {
+  height: min(64vh, 640px);
+  overflow: auto;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.aichat-msg {
+  display: flex;
+  margin: 10px 0;
+}
+
+.aichat-msg.is-user {
+  justify-content: flex-end;
+}
+
+.aichat-bubble {
+  max-width: 82%;
+  white-space: pre-wrap;
+  line-height: 1.35;
+  padding: 11px 12px;
+  border-radius: 14px;
+  font-weight: 650;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.aichat-msg.is-user .aichat-bubble {
+  background: #0f766e;
+  color: white;
+  border-color: rgba(15, 118, 110, 0.35);
+}
+
+.aichat-msg.is-assistant .aichat-bubble {
+  background: rgba(248, 250, 252, 0.95);
+  color: #0f172a;
+}
+
+.aichat-bubble--muted {
+  opacity: 0.75;
+}
+
+.aichat-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.aichat-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+.aichat-card-title {
+  font-weight: 950;
+  color: #0f172a;
+  margin-bottom: 10px;
+}
+
+.aichat-kv {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.aichat-k {
+  color: rgba(15, 23, 42, 0.6);
+  font-weight: 800;
+}
+
+.aichat-v {
+  color: #0f172a;
+  font-weight: 850;
+}
+
+.aichat-muted {
+  color: rgba(15, 23, 42, 0.62);
+  font-weight: 650;
+  font-size: 0.95rem;
+}
+
+.aichat-doctor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.aichat-doctor-item {
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(248, 250, 252, 0.95);
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.aichat-doctor-item.is-active {
+  border-color: rgba(15, 118, 110, 0.5);
+  background: rgba(240, 253, 250, 0.95);
+}
+
+.aichat-doctor-name {
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.aichat-doctor-spec {
+  margin-top: 2px;
+  color: rgba(15, 23, 42, 0.65);
+  font-weight: 700;
+  font-size: 0.94rem;
+}
+
+.aichat-confirm {
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 12px;
+  font-weight: 950;
+  cursor: pointer;
+  color: white;
+  background: linear-gradient(135deg, #0f766e, #2563eb);
+}
+
+.aichat-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.aichat-error {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(254, 242, 242, 0.9);
+  color: #b91c1c;
+  font-weight: 850;
+}
+
+.aichat-input {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 110px;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.aichat-input input {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  padding: 12px 12px;
+  outline: none;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.aichat-input button {
+  border: none;
+  border-radius: 14px;
+  font-weight: 950;
+  cursor: pointer;
+  background: #0f172a;
+  color: white;
+}
+
+@media (max-width: 980px) {
+  .aichat-shell {
+    grid-template-columns: 1fr;
+  }
+  .aichat-body {
+    height: min(62vh, 620px);
+  }
+}
+

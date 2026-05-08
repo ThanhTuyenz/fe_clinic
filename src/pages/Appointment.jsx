@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { getMe } from '../api/auth.js'
 import { isMongoObjectId, listDoctors } from '../api/doctors.js'
 import { createAppointment } from '../api/appointments.js'
+import { listDepartments } from '../api/departments.js'
+import { listSpecialties } from '../api/specialties.js'
 import logo from '../assets/logo.png'
 import '../styles/auth.css'
 import '../styles/appointment.css'
@@ -21,6 +23,42 @@ function getSession() {
   const userRaw = localStorage.getItem('user') || sessionStorage.getItem('user')
   const user = safeParse(userRaw || 'null')
   return { token, user }
+}
+
+function getUserName(u) {
+  const first = String(u?.firstName || '').trim()
+  const last = String(u?.lastName || '').trim()
+  const full = `${last} ${first}`.trim()
+  if (full) return full
+  return String(u?.displayName || u?.fullName || u?.name || '').trim()
+}
+
+function getUserEmail(u) {
+  return String(u?.email || u?.username || '').trim()
+}
+
+function getUserDisplayName(u) {
+  const name = getUserName(u)
+  if (name) return name
+  const email = getUserEmail(u)
+  if (!email) return ''
+  const local = email.split('@')[0] || ''
+  return local.trim()
+}
+
+function getUserInitials(u) {
+  const base = getUserDisplayName(u) || getUserEmail(u)
+  if (!base) return '?'
+  const words = base
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
 }
 
 function formatDateVi(isoOrDate) {
@@ -249,12 +287,18 @@ export default function Appointment() {
   const { token, user } = useMemo(() => getSession(), [])
   const requestedDoctorId = location.state?.doctorId
   const requestedDeptId = location.state?.deptId
+  const requestedAppointmentDate = location.state?.appointmentDate
 
   const todayISO = useMemo(() => toISODate(new Date()), [])
   const maxISO = useMemo(() => toISODate(addMonthsClamped(new Date(), 3)), [])
 
+  const userName = getUserDisplayName(user)
+  const userEmail = getUserEmail(user)
+
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
+  const [deptCatalog, setDeptCatalog] = useState(() => new Map())
+  const [specialtyToDept, setSpecialtyToDept] = useState(() => new Map())
 
   const [doctorId, setDoctorId] = useState('')
   const [doctorLoadError, setDoctorLoadError] = useState('')
@@ -277,6 +321,14 @@ export default function Appointment() {
     const next = clampISODate(appointmentDate, todayISO, maxISO)
     if (next !== appointmentDate) setAppointmentDate(next)
   }, [appointmentDate, todayISO, maxISO])
+
+  // Prefill from navigation state (re-book, landing, etc.)
+  useEffect(() => {
+    const req = String(requestedAppointmentDate || '').trim()
+    if (!req) return
+    const next = clampISODate(req, todayISO, maxISO)
+    if (next && next !== appointmentDate) setAppointmentDate(next)
+  }, [requestedAppointmentDate, todayISO, maxISO, appointmentDate])
 
   const [patientDraft, setPatientDraft] = useState(() => {
     const u = user || {}
@@ -382,6 +434,50 @@ export default function Appointment() {
       .finally(() => setLoadingDoctors(false))
   }, [token, user, navigate, requestedDoctorId, requestedDeptId])
 
+  useEffect(() => {
+    // Public endpoint: fetch official deptID → deptName map
+    listDepartments()
+      .then((rows) => {
+        const m = new Map()
+        for (const r of rows || []) {
+          const id = String(r?.deptID || r?.deptId || '').trim()
+          const name = String(r?.deptName || r?.name || '').trim()
+          if (id && name) m.set(id, name)
+        }
+        setDeptCatalog(m)
+      })
+      .catch(() => {
+        // ignore; fallback to doctors[].deptName
+      })
+  }, [])
+
+  useEffect(() => {
+    // Public endpoint: fetch specialtyID → deptID
+    listSpecialties()
+      .then((rows) => {
+        const m = new Map()
+        for (const r of rows || []) {
+          const sid = String(r?.specialtyID || r?.specialtyId || '').trim()
+          const did = String(r?.deptID || r?.deptId || '').trim()
+          if (sid && did) m.set(sid, did)
+        }
+        setSpecialtyToDept(m)
+      })
+      .catch(() => {
+        // ignore; fallback to doctors[].deptID
+      })
+  }, [])
+
+  const resolveDeptId = (d) => {
+    const rawDept = String(d?.deptID || '').trim()
+    const specId = String(d?.specialtyID || d?.specialtyId || '').trim()
+    if (specId && specialtyToDept.has(specId)) return String(specialtyToDept.get(specId) || '').trim()
+    // Some seed data put specialty code into deptName, keep fallback sane.
+    if (rawDept && rawDept.toUpperCase().startsWith('DEPT-')) return rawDept
+    if (rawDept) return rawDept
+    return ''
+  }
+
   function handleOpenDoctorDetail(nextId) {
     setDoctorId(nextId)
     setShowDoctorDetail(true)
@@ -401,20 +497,22 @@ export default function Appointment() {
   const departments = useMemo(() => {
     const map = new Map()
     for (const d of doctors || []) {
-      const id = String(d?.deptID || '').trim()
-      const name = String(d?.deptName || '').trim()
-      if (!id || !name) continue
-      const prev = map.get(id)
-      map.set(id, prev ? { ...prev, count: prev.count + 1 } : { id, name, count: 1 })
+      const deptId = resolveDeptId(d)
+      const name =
+        String(deptCatalog.get(deptId) || '').trim() ||
+        String(d?.deptName || '').trim()
+      if (!deptId || !name) continue
+      const prev = map.get(deptId)
+      map.set(deptId, prev ? { ...prev, count: prev.count + 1 } : { id: deptId, name, count: 1 })
     }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
-  }, [doctors])
+  }, [doctors, deptCatalog, specialtyToDept])
 
   const filteredDoctors = useMemo(() => {
     const q = String(searchQuery || '').trim().toLowerCase()
     const deptId = String(activeDeptId || '').trim()
     return (doctors || []).filter((d) => {
-      if (deptId && String(d?.deptID || '').trim() !== deptId) return false
+      if (deptId && resolveDeptId(d) !== deptId) return false
       if (!q) return true
       const name = getDoctorFullName(d).toLowerCase()
       const rankName = getDoctorRankName(d).toLowerCase()
@@ -423,7 +521,7 @@ export default function Appointment() {
       const dept = String(d?.deptName || '').toLowerCase()
       return name.includes(q) || rankName.includes(q) || email.includes(q) || spec.includes(q) || dept.includes(q)
     })
-  }, [doctors, searchQuery, activeDeptId])
+  }, [doctors, searchQuery, activeDeptId, specialtyToDept])
 
   const pageSize = 9
   const totalPages = Math.max(1, Math.ceil(filteredDoctors.length / pageSize))
@@ -669,35 +767,42 @@ export default function Appointment() {
           <Link to="/landing#lien-he">Liên hệ</Link>
           <span className="landing-nav-actions">
             {user ? (
-              <>
-                <span className="landing-user-wrap" tabIndex={0}>
-                  <span className="landing-greet">
-                    Xin chào, {user.displayName || user.fullName || user.email}
+              <span className="landing-user-wrap">
+                <button type="button" className="landing-user-chip" aria-haspopup="menu">
+                  <span className="landing-user-avatar" aria-hidden="true">
+                    {getUserInitials(user)}
                   </span>
-                  <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
-                    <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
-                      Lịch khám
-                    </Link>
-                    <Link className="landing-user-menu-item" to="/home" role="menuitem">
-                      Thông tin
-                    </Link>
-                    <button
-                      type="button"
-                      className="landing-user-menu-item landing-user-menu-logout"
-                      onClick={() => {
-                        localStorage.removeItem('token')
-                        localStorage.removeItem('user')
-                        sessionStorage.removeItem('token')
-                        sessionStorage.removeItem('user')
-                        navigate('/landing', { replace: true })
-                      }}
-                      role="menuitem"
-                    >
-                      Đăng xuất
-                    </button>
+                  <span className="landing-user-meta">
+                    <span className="landing-user-name">{userName || 'Tài khoản'}</span>
+                    <span className="landing-user-email">{userEmail || '—'}</span>
                   </span>
+                  <span className="landing-user-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
+                <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
+                  <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
+                    Lịch khám
+                  </Link>
+                  <Link className="landing-user-menu-item" to="/home" role="menuitem">
+                    Thông tin
+                  </Link>
+                  <button
+                    type="button"
+                    className="landing-user-menu-item landing-user-menu-logout"
+                    onClick={() => {
+                      localStorage.removeItem('token')
+                      localStorage.removeItem('user')
+                      sessionStorage.removeItem('token')
+                      sessionStorage.removeItem('user')
+                      navigate('/landing', { replace: true })
+                    }}
+                    role="menuitem"
+                  >
+                    Đăng xuất
+                  </button>
                 </span>
-              </>
+              </span>
             ) : (
               <>
                 <Link className="landing-btn landing-btn--ghost" to="/login">

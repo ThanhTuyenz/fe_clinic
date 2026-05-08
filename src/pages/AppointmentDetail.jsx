@@ -20,6 +20,42 @@ function getSession() {
   return { token, user }
 }
 
+function getUserName(u) {
+  const first = String(u?.firstName || '').trim()
+  const last = String(u?.lastName || '').trim()
+  const full = `${last} ${first}`.trim()
+  if (full) return full
+  return String(u?.displayName || u?.fullName || u?.name || '').trim()
+}
+
+function getUserEmail(u) {
+  return String(u?.email || u?.username || '').trim()
+}
+
+function getUserDisplayName(u) {
+  const name = getUserName(u)
+  if (name) return name
+  const email = getUserEmail(u)
+  if (!email) return ''
+  const local = email.split('@')[0] || ''
+  return local.trim()
+}
+
+function getUserInitials(u) {
+  const base = getUserDisplayName(u) || getUserEmail(u)
+  if (!base) return '?'
+  const words = base
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+}
+
 function addMinutesToHHmm(hhmm, minutesToAdd) {
   const [hh, mm] = String(hhmm || '00:00')
     .split(':')
@@ -107,6 +143,8 @@ export default function AppointmentDetail() {
   const { appointmentId } = useParams()
   const location = useLocation()
   const { token, user } = useMemo(() => getSession(), [])
+  const userName = getUserDisplayName(user)
+  const userEmail = getUserEmail(user)
 
   const id = String(appointmentId || '').trim()
   const bookingSummary = location.state?.bookingSummary
@@ -276,10 +314,19 @@ export default function AppointmentDetail() {
           <Link to="/appointments">Đặt khám</Link>
           <span className="landing-nav-actions">
             {user ? (
-              <span className="landing-user-wrap" tabIndex={0}>
-                <span className="landing-greet">
-                  Xin chào, {user.displayName || user.fullName || user.email}
-                </span>
+              <span className="landing-user-wrap">
+                <button type="button" className="landing-user-chip" aria-haspopup="menu">
+                  <span className="landing-user-avatar" aria-hidden="true">
+                    {getUserInitials(user)}
+                  </span>
+                  <span className="landing-user-meta">
+                    <span className="landing-user-name">{userName || 'Tài khoản'}</span>
+                    <span className="landing-user-email">{userEmail || '—'}</span>
+                  </span>
+                  <span className="landing-user-caret" aria-hidden="true">
+                    ▾
+                  </span>
+                </button>
                 <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
                   <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                     Lịch khám

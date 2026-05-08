@@ -458,6 +458,17 @@
   background: #fef2f2;
 }
 
+.myappt-btn--primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.myappt-btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
 .myappt-detail-empty {
   padding: 48px 16px;
   text-align: center;

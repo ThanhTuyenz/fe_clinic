@@ -108,13 +108,80 @@
   color: #fff !important;
 }
 
-/* Chỉ để phần text chào mừng trong header */
-.landing-greet {
+/* User chip (avatar + name + email) */
+.landing-user-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.landing-user-chip {
+  appearance: none;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(8px);
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+
+.landing-user-chip:hover {
+  background: rgba(241, 245, 249, 0.95);
+  border-color: rgba(203, 213, 225, 0.95);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+}
+
+.landing-user-chip:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 2px;
+}
+
+.landing-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 950;
+  color: #fff;
+  background: rgba(99, 102, 241, 0.95);
+  flex: 0 0 auto;
+}
+
+.landing-user-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.landing-user-name {
   font-size: 0.92rem;
-  font-weight: 600;
+  font-weight: 900;
   color: var(--text-heading);
   white-space: nowrap;
-  user-select: none;
+}
+
+.landing-user-email {
+  margin-top: 2px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: rgba(100, 116, 139, 0.95);
+  white-space: nowrap;
+}
+
+.landing-user-caret {
+  flex: 0 0 auto;
+  font-size: 0.85rem;
+  color: rgba(100, 116, 139, 0.95);
+  margin-left: 2px;
 }
 
 /* Đảm bảo Link không bị override bởi rule `a { ... }` hoặc `:visited` */
@@ -129,6 +196,21 @@
   max-width: var(--site-content-max);
   margin: 0 auto;
   padding: 2rem var(--site-gutter-x) 3rem;
+}
+
+.landing-welcome {
+  margin: 0 0 1.25rem;
+}
+
+.landing-welcome-text {
+  font-size: clamp(1.3rem, 3.4vw, 2rem);
+  font-weight: 950;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.landing-welcome-email {
+  font-weight: 950;
 }
 
 .landing-hero {
@@ -926,13 +1008,6 @@
   color: var(--clinic-primary);
 }
 
-/* Dropdown menu người dùng (chỉ hiện khi hover vào "Xin chào") */
-.landing-user-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
 .landing-user-menu {
   position: absolute;
   top: calc(100% + 0.5rem);
@@ -958,7 +1033,6 @@
 }
 
 .landing-user-wrap:hover .landing-user-menu,
-.landing-user-wrap:focus .landing-user-menu,
 .landing-user-wrap:focus-within .landing-user-menu {
   opacity: 1;
   visibility: visible;

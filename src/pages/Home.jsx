@@ -1,10 +1,51 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { updateMe } from '../api/auth.js'
+import { listMyAppointments } from '../api/appointments.js'
 import { listDoctors } from '../api/doctors.js'
 import logo from '../assets/logo.png'
 import banner from '../assets/Banner.jpg'
 import '../styles/landing.css'
+
+function getUserName(u) {
+  const first = String(u?.firstName || '').trim()
+  const last = String(u?.lastName || '').trim()
+  const full = `${last} ${first}`.trim()
+  if (full) return full
+  return String(u?.displayName || u?.fullName || u?.name || '').trim()
+}
+
+function getUserEmail(u) {
+  return String(u?.email || u?.username || '').trim()
+}
+
+function getUserDisplayName(u) {
+  const name = getUserName(u)
+  if (name) return name
+  const email = getUserEmail(u)
+  if (!email) return ''
+  const local = email.split('@')[0] || ''
+  return local.trim()
+}
+
+function getUserInitials(u) {
+  const base = getUserDisplayName(u) || getUserEmail(u)
+  if (!base) return '?'
+  const words = base
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  const letters = words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+  return letters.toUpperCase()
+}
+
+function getTokenFromStorage() {
+  return localStorage.getItem('token') || sessionStorage.getItem('token') || ''
+}
 
 function getDoctorFullName(d) {
   const first = String(d?.firstName || '').trim()
@@ -119,11 +160,15 @@ export default function Landing() {
   }
 
   const user = getStoredUser()
+  const userName = getUserDisplayName(user)
+  const userEmail = getUserEmail(user)
 
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [doctorError, setDoctorError] = useState('')
   const [doctorQuery, setDoctorQuery] = useState('')
+
+  const [nearestApptDoctor, setNearestApptDoctor] = useState(null)
 
   const [patientInfoModalOpen, setPatientInfoModalOpen] = useState(false)
   const [patientInfoError, setPatientInfoError] = useState('')
@@ -261,12 +306,64 @@ export default function Landing() {
 
   const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
 
+  useEffect(() => {
+    if (!user) return
+    const token = getTokenFromStorage()
+    if (!token) return
+    let cancelled = false
+
+    function apptStartDate(a) {
+      const dateIso = String(a?.appointmentDate || '').slice(0, 10)
+      const start = String(a?.startTime || '').trim()
+      if (dateIso && start) {
+        const dt = new Date(`${dateIso}T${start}:00`)
+        if (!Number.isNaN(dt.getTime())) return dt
+      }
+      const fallback = new Date(a?.appointmentDate)
+      return fallback
+    }
+
+    ;(async () => {
+      try {
+        const rows = await listMyAppointments({ token })
+        if (cancelled) return
+        const now = Date.now()
+        const candidates = (rows || [])
+          .filter((a) => String(a?.status || '').toLowerCase() !== 'cancelled')
+          .map((a) => ({ a, dt: apptStartDate(a) }))
+          .filter((x) => x.dt instanceof Date && !Number.isNaN(x.dt.getTime()) && x.dt.getTime() >= now)
+          .sort((x, y) => x.dt.getTime() - y.dt.getTime())
+
+        const nearest = candidates[0]?.a || null
+        const doc = nearest?.doctor || null
+        setNearestApptDoctor(doc)
+      } catch {
+        // ignore: fallback to featured doctors
+        setNearestApptDoctor(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   const normalizedDoctorQuery = useMemo(() => String(doctorQuery || '').trim().toLowerCase(), [doctorQuery])
 
   const visibleDoctors = useMemo(() => {
-    if (!normalizedDoctorQuery) return featuredDoctors
+    const baseList = (() => {
+      if (!nearestApptDoctor) return featuredDoctors
+      const nearestId = String(nearestApptDoctor?.id ?? nearestApptDoctor?._id ?? '').trim()
+      const rest = featuredDoctors.filter((d) => {
+        const did = String(d?.id ?? d?._id ?? '').trim()
+        return !(nearestId && did && did === nearestId)
+      })
+      return [nearestApptDoctor, ...rest].slice(0, 10)
+    })()
+
+    if (!normalizedDoctorQuery) return baseList
     const q = normalizedDoctorQuery
-    return featuredDoctors.filter((d) => {
+    return baseList.filter((d) => {
       const name = String(getDoctorFullName(d) || '').toLowerCase()
       const rankName = String(getDoctorRankName(d) || '').toLowerCase()
       const specialty = String(getDoctorCardSpecialty(d) || '').toLowerCase()
@@ -280,7 +377,7 @@ export default function Landing() {
         email.includes(q)
       )
     })
-  }, [featuredDoctors, normalizedDoctorQuery])
+  }, [featuredDoctors, normalizedDoctorQuery, nearestApptDoctor])
 
   const featuredDepartments = useMemo(() => {
     const map = new Map()
@@ -332,13 +429,25 @@ export default function Landing() {
           <span className="landing-nav-actions">
             {user ? (
               <>
-                <span className="landing-user-wrap" tabIndex={0}>
-                  <span className="landing-greet">
-                    Xin chào, {user.displayName || user.fullName || user.email}
-                  </span>
+                <span className="landing-user-wrap">
+                  <button type="button" className="landing-user-chip" aria-haspopup="menu">
+                    <span className="landing-user-avatar" aria-hidden="true">
+                      {getUserInitials(user)}
+                    </span>
+                    <span className="landing-user-meta">
+                      <span className="landing-user-name">{userName || 'Tài khoản'}</span>
+                      <span className="landing-user-email">{userEmail || '—'}</span>
+                    </span>
+                    <span className="landing-user-caret" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
                   <span className="landing-user-menu" role="menu" aria-label="Menu người dùng">
                     <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                       Lịch khám
+                    </Link>
+                    <Link className="landing-user-menu-item" to="/ai" role="menuitem">
+                      Trợ lý đặt lịch
                     </Link>
                     <Link className="landing-user-menu-item" to="/home" role="menuitem">
                       Thông tin
@@ -369,6 +478,13 @@ export default function Landing() {
       </header>
 
       <main className="landing-main">
+        {user ? (
+          <section className="landing-welcome" aria-label="Lời chào">
+            <div className="landing-welcome-text">
+              Xin chào, <span className="landing-welcome-email">{userName || userEmail}</span>
+            </div>
+          </section>
+        ) : null}
         <section
           className="landing-hero"
           aria-labelledby="landing-title"

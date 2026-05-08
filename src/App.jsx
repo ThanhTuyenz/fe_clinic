@@ -6,6 +6,7 @@ import VerifyOtp from './pages/VerifyOtp.jsx'
 import Appointment from './pages/Appointment.jsx'
 import AppointmentDetail from './pages/AppointmentDetail.jsx'
 import MyAppointments from './pages/MyAppointments.jsx'
+import AIChat from './pages/AIChat.jsx'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/appointments/:appointmentId" element={<AppointmentDetail />} />
         <Route path="/appointments" element={<Appointment />} />
         <Route path="/my-appointments" element={<MyAppointments />} />
+        <Route path="/ai" element={<AIChat />} />
         <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
