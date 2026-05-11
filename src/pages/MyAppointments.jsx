@@ -435,7 +435,11 @@ export default function MyAppointments() {
 
   return (
     <div className="myappt-page">
-      {toastVisible ? <div className="apdetail-toast">Đặt lịch thành công!</div> : null}
+      {toastVisible ? (
+        <div className="apdetail-toast">
+          Đặt lịch thành công! Email xác nhận và mã QR đã được gửi tới Gmail của bạn.
+        </div>
+      ) : null}
       <header className="landing-header">
         <Link className="landing-brand" to="/landing">
           <img className="landing-logo" src={logo} alt="VitaCare Clinic" />
