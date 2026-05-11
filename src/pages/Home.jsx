@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { updateMe } from '../api/auth.js'
 import { listMyAppointments } from '../api/appointments.js'
+import { listDepartments } from '../api/departments.js'
 import { listDoctors } from '../api/doctors.js'
 import logo from '../assets/logo.png'
 import banner from '../assets/Banner.jpg'
+import SpecialtyIcon from '../components/SpecialtyIcon.jsx'
 import '../styles/landing.css'
 
 function getUserName(u) {
@@ -167,6 +169,9 @@ export default function Landing() {
   const [loadingDoctors, setLoadingDoctors] = useState(true)
   const [doctorError, setDoctorError] = useState('')
   const [doctorQuery, setDoctorQuery] = useState('')
+  const [departments, setDepartments] = useState([])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
+  const [departmentError, setDepartmentError] = useState('')
 
   const [nearestApptDoctor, setNearestApptDoctor] = useState(null)
 
@@ -304,6 +309,30 @@ export default function Landing() {
     }
   }, [])
 
+  useEffect(() => {
+    let mounted = true
+    /* eslint-disable react-hooks/set-state-in-effect -- reset UI before async listDepartments */
+    setLoadingDepartments(true)
+    setDepartmentError('')
+    /* eslint-enable react-hooks/set-state-in-effect */
+    listDepartments()
+      .then((rows) => {
+        if (!mounted) return
+        setDepartments(rows || [])
+      })
+      .catch((err) => {
+        if (!mounted) return
+        setDepartmentError(err.message || 'Không lấy được danh sách khoa.')
+      })
+      .finally(() => {
+        if (!mounted) return
+        setLoadingDepartments(false)
+      })
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
 
   useEffect(() => {
@@ -379,33 +408,17 @@ export default function Landing() {
     })
   }, [featuredDoctors, normalizedDoctorQuery, nearestApptDoctor])
 
-  const featuredDepartments = useMemo(() => {
-    const map = new Map()
-    for (const d of doctors || []) {
-      let id = String(d?.deptID || '').trim()
-      let name = String(d?.deptName || '').trim()
-      if (isDepartmentCodeLike(name)) name = ''
-      if (!id || !name) {
-        const spec = String(d?.specialtyName || d?.specialty || '').trim()
-        if (spec && spec !== 'Chuyên khoa') {
-          name = spec
-          id = `dept-${spec
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '')
-            .slice(0, 48)}`
-        }
-      }
-      if (!id || !name) continue
-      const prev = map.get(id)
-      map.set(id, prev ? { ...prev, count: prev.count + 1 } : { id, name, count: 1 })
-    }
-    return Array.from(map.values())
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'vi'))
-      .slice(0, 10)
-  }, [doctors])
+  const featuredDepartments = useMemo(
+    () =>
+      (departments || [])
+        .map((row) => ({
+          id: String(row?.deptID || row?.deptId || row?.id || '').trim(),
+          name: String(row?.deptName || row?.name || '').trim(),
+        }))
+        .filter((row) => row.id && row.name)
+        .slice(0, 14),
+    [departments],
+  )
 
   function logout() {
     localStorage.removeItem('token')
@@ -545,7 +558,9 @@ export default function Landing() {
 
           <div className="landing-booking-head">
             <div>
-              <h2 id="sec-booking">Đặt lịch khám trực tuyến</h2>
+              <h2 className="landing-booking-title" id="sec-booking">
+                Đặt lịch khám trực tuyến
+              </h2>
               <p className="landing-booking-sub">Tìm bác sĩ chính xác - Đặt lịch khám dễ dàng</p>
             </div>
             <Link className="landing-more" to="/appointments">
@@ -638,39 +653,41 @@ export default function Landing() {
         <section className="landing-section landing-specialties" aria-labelledby="sec-specialties">
           <div className="landing-booking-head landing-specialties-head">
             <div>
-              <h2 id="sec-specialties">Khám theo chuyên khoa</h2>
-              <p className="landing-booking-sub">Chọn chuyên khoa để lọc nhanh danh sách bác sĩ phù hợp.</p>
+              <h2 className="landing-booking-title" id="sec-specialties">
+                Đặt khám theo khoa
+              </h2>
+              <p className="landing-booking-sub">Chọn khoa để lọc nhanh danh sách bác sĩ phù hợp.</p>
             </div>
             <Link className="landing-more" to="/appointments">
               Xem tất cả <span aria-hidden="true">›</span>
             </Link>
           </div>
 
-          <div className="landing-specialty-grid" role="list" aria-label="Danh sách chuyên khoa">
-            {featuredDepartments.length ? (
+          <div className="landing-specialty-grid" role="list" aria-label="Danh sách khoa">
+            {loadingDepartments ? (
+              <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
+                Đang tải danh sách khoa…
+              </div>
+            ) : departmentError ? (
+              <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
+                {departmentError}
+              </div>
+            ) : featuredDepartments.length ? (
               featuredDepartments.map((s) => (
                 <button
                   key={s.id}
                   type="button"
                   className="landing-specialty-card"
                   role="listitem"
-                  onClick={() => navigate('/appointments', { state: { deptId: s.id } })}
+                  onClick={() => handleBookClick({ deptId: s.id })}
                 >
-                  <span className="landing-specialty-icon" aria-hidden="true">
-                    +
-                  </span>
-                  <span className="landing-specialty-meta">
-                    <span className="landing-specialty-name">{s.name}</span>
-                    <span className="landing-specialty-count">{s.count} bác sĩ</span>
-                  </span>
-                  <span className="landing-specialty-cta" aria-hidden="true">
-                    Chọn <span aria-hidden="true">›</span>
-                  </span>
+                  <SpecialtyIcon name={s.name} className="landing-specialty-icon" />
+                  <span className="landing-specialty-name">{s.name}</span>
                 </button>
               ))
             ) : (
               <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
-                Chưa có dữ liệu chuyên khoa.
+                Chưa có dữ liệu khoa.
               </div>
             )}
           </div>

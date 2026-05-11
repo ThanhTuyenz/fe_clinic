@@ -148,9 +148,15 @@ function normalizeAvatarUrl(url) {
   return s
 }
 
+function isAppointmentExamined(status) {
+  const s = String(status || '').toLowerCase()
+  return s === 'examined' || s === 'completed' || s === 'done'
+}
+
 function statusLabel(status) {
   const s = String(status || '').toLowerCase()
   if (s === 'cancelled') return { text: 'Đã hủy', tone: 'bad' }
+  if (isAppointmentExamined(s)) return { text: 'Đã khám', tone: 'ok' }
   if (s === 'confirmed') return { text: 'Đã xác nhận', tone: 'ok' }
   if (s === 'pending') return { text: 'Đã đặt lịch', tone: 'ok' }
   return { text: 'Chờ xác nhận', tone: 'pending' }
@@ -210,6 +216,33 @@ function formatIsoDateOnly(isoOrDate) {
   const d = isoOrDate instanceof Date ? isoOrDate : new Date(isoOrDate)
   if (Number.isNaN(d.getTime())) return ''
   return d.toISOString().slice(0, 10)
+}
+
+function addDaysToIsoDate(isoDate, days) {
+  const base = String(isoDate || '').trim()
+  if (!base) return ''
+  const d = new Date(`${base}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function suggestFollowUpDateIso(appointmentDate) {
+  const today = new Date().toISOString().slice(0, 10)
+  const base = formatIsoDateOnly(appointmentDate) || today
+  const suggested = addDaysToIsoDate(base, 14)
+  if (!suggested) return today
+  return suggested < today ? today : suggested
+}
+
+function getSelectedDoctorId(appointment) {
+  const rawDoctorId =
+    appointment?.doctor?.id ??
+    appointment?.doctor?.doctorId ??
+    appointment?.doctorId ??
+    appointment?.doctorID ??
+    ''
+  return String(rawDoctorId || '').trim()
 }
 
 export default function MyAppointments() {
@@ -304,7 +337,7 @@ export default function MyAppointments() {
   }
 
   function openCancelModal() {
-    if (!selected || String(selected.status).toLowerCase() === 'cancelled') return
+    if (!selected || String(selected.status).toLowerCase() === 'cancelled' || isAppointmentExamined(selected.status)) return
     setCancelErr('')
     setCancelPresetId('busy')
     setCancelOtherText('')
@@ -318,18 +351,25 @@ export default function MyAppointments() {
 
   function handleRebook() {
     if (!selected) return
-    const rawDoctorId =
-      selected?.doctor?.id ??
-      selected?.doctor?.doctorId ??
-      selected?.doctorId ??
-      selected?.doctorID ??
-      ''
-    const doctorId = String(rawDoctorId || '').trim()
+    const doctorId = getSelectedDoctorId(selected)
     const appointmentDate = formatIsoDateOnly(selected?.appointmentDate)
     navigate('/appointments', {
       state: {
         doctorId: doctorId || undefined,
         appointmentDate: appointmentDate || undefined,
+      },
+    })
+  }
+
+  function handleFollowUp() {
+    if (!selected) return
+    const doctorId = getSelectedDoctorId(selected)
+    const appointmentDate = suggestFollowUpDateIso(selected?.appointmentDate)
+    navigate('/appointments', {
+      state: {
+        doctorId: doctorId || undefined,
+        appointmentDate: appointmentDate || undefined,
+        note: 'Tái khám',
       },
     })
   }
@@ -344,7 +384,7 @@ export default function MyAppointments() {
 
   async function confirmCancelAppointment() {
     if (!selected || !token) return
-    if (String(selected.status).toLowerCase() === 'cancelled') return
+    if (String(selected.status).toLowerCase() === 'cancelled' || isAppointmentExamined(selected.status)) return
     const reasonText = resolveCancelReasonText()
     if (!reasonText) {
       setCancelErr(
@@ -408,6 +448,7 @@ export default function MyAppointments() {
     const dob = formatUserDob(user)
     const gender = formatUserGender(user)
     const address = String(user?.address || '').trim() ? String(user.address).trim() : 'Chưa cập nhật'
+    const followUpDateIso = suggestFollowUpDateIso(selected.appointmentDate)
 
     return {
       st,
@@ -426,7 +467,10 @@ export default function MyAppointments() {
       gender,
       address,
       dateVi: formatDateVi(selected.appointmentDate),
+      followUpDateIso,
+      followUpDateVi: formatDateVi(followUpDateIso),
       cancelled: String(selected.status).toLowerCase() === 'cancelled',
+      examined: isAppointmentExamined(selected.status),
       cancelReason: String(selected.cancelReason || '').trim(),
       cancelledByLine: formatCancelledByLine(selected.cancelledBy),
       cancelledAtVi: formatCancelledAtVi(selected.cancelledAt),
@@ -683,10 +727,25 @@ export default function MyAppointments() {
                     </div>
                   </div>
 
+                  {detailView.examined ? (
+                    <div className="myappt-block myappt-block--followup">
+                      <h2 className="myappt-block-title">Đề xuất tái khám</h2>
+                      <p className="myappt-followup-text">
+                        Nếu bác sĩ khuyên theo dõi, bạn có thể đặt lịch tái khám với{' '}
+                        <strong>{detailView.doctorName}</strong> vào khoảng{' '}
+                        <strong>{detailView.followUpDateVi}</strong>.
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="myappt-detail-actions">
                     {detailView.cancelled ? (
                       <button type="button" className="myappt-btn myappt-btn--primary" onClick={handleRebook}>
                         Đặt lại
+                      </button>
+                    ) : detailView.examined ? (
+                      <button type="button" className="myappt-btn myappt-btn--primary" onClick={handleFollowUp}>
+                        Đặt lịch tái khám
                       </button>
                     ) : (
                       <button

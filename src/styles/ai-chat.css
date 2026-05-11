@@ -148,21 +148,51 @@
 .aichat-doctor-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.aichat-doctor-item {
-  text-align: left;
-  border-radius: 14px;
+.aichat-doctor-card {
+  border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: rgba(248, 250, 252, 0.95);
-  padding: 10px 12px;
-  cursor: pointer;
+  padding: 12px;
 }
 
-.aichat-doctor-item.is-active {
-  border-color: rgba(15, 118, 110, 0.5);
-  background: rgba(240, 253, 250, 0.95);
+.aichat-doctor-card-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.aichat-doctor-avatar {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  flex: 0 0 56px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.18), rgba(37, 99, 235, 0.14));
+}
+
+.aichat-doctor-avatar-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  color: #0f766e;
+}
+
+.aichat-doctor-avatar-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.aichat-doctor-card-meta {
+  min-width: 0;
 }
 
 .aichat-doctor-name {
@@ -177,20 +207,31 @@
   font-size: 0.94rem;
 }
 
-.aichat-confirm {
+.aichat-doctor-dept {
+  margin-top: 2px;
+  color: rgba(15, 23, 42, 0.5);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.aichat-doctor-bio {
+  margin: 10px 0 0;
+  color: rgba(15, 23, 42, 0.72);
+  font-weight: 650;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.aichat-doctor-book {
   width: 100%;
+  margin-top: 12px;
   border: none;
-  border-radius: 14px;
-  padding: 12px 12px;
+  border-radius: 12px;
+  padding: 11px 12px;
   font-weight: 950;
   cursor: pointer;
   color: white;
   background: linear-gradient(135deg, #0f766e, #2563eb);
-}
-
-.aichat-confirm:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .aichat-error {

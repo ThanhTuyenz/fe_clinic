@@ -509,6 +509,20 @@
   border-color: #fecaca;
 }
 
+.myappt-block--followup {
+  padding: 16px 18px;
+  border: 1px solid #a7f3d0;
+  border-radius: 12px;
+  background: #ecfdf5;
+}
+
+.myappt-followup-text {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: #065f46;
+}
+
 .myappt-kv-row--multiline span:last-child {
   white-space: pre-wrap;
   text-align: right;

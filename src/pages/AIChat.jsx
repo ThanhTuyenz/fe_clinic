@@ -59,6 +59,44 @@ function asText(x) {
   return String(x == null ? '' : x)
 }
 
+const DEFAULT_DOCTOR_AVATAR =
+  'https://sf-static.upanhlaylink.com/img/image_202603269925437b540c48178c53b73c88dd8146.jpg'
+
+function getDoctorAvatarSrc(d) {
+  const candidate = String(d?.avatarUrl || d?.avatar_url || '').trim()
+  return candidate || DEFAULT_DOCTOR_AVATAR
+}
+
+function getDoctorIntro(d) {
+  const bio = String(d?.bio || '').trim()
+  if (bio) {
+    const compact = bio.replace(/\s+/g, ' ').trim()
+    return compact.length > 220 ? `${compact.slice(0, 217)}…` : compact
+  }
+  const specialty = String(d?.specialty || '').trim()
+  const years = Number(d?.experienceYears)
+  if (specialty && Number.isFinite(years) && years > 0) {
+    return `Bác sĩ ${d?.name || ''} có hơn ${years} năm kinh nghiệm trong lĩnh vực ${specialty}.`
+  }
+  if (specialty) {
+    return `Bác sĩ ${d?.name || ''} chuyên khám và điều trị các vấn đề thuộc chuyên khoa ${specialty}.`
+  }
+  return `Bác sĩ ${d?.name || ''} sẵn sàng hỗ trợ bạn đặt lịch khám tại phòng khám.`
+}
+
+function getDoctorInitials(name) {
+  const words = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!words.length) return '?'
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+}
+
 export default function AIChat() {
   const navigate = useNavigate()
   const { token, user } = useMemo(() => getSession(), [])
@@ -69,7 +107,7 @@ export default function AIChat() {
     {
       role: 'assistant',
       content:
-        'Chào bạn! Mình là trợ lý đặt lịch. Bạn mô tả ngắn triệu chứng/nhu cầu khám (vd: đau họng 3 ngày, ho khan, sốt nhẹ) và thời gian bạn muốn khám.',
+        'Chào bạn! Mình là trợ lý đặt lịch. Bạn cứ nói rõ nhu cầu khám, khoa muốn gặp, hoặc ngày giờ mong muốn — mình sẽ bám theo để gợi ý lịch phù hợp.',
     },
   ])
   const [draft, setDraft] = useState('')
@@ -129,6 +167,19 @@ export default function AIChat() {
   const draftSpecialty = asText(state?.specialty).trim()
   const draftDate = asText(state?.appointmentDate).slice(0, 10)
   const draftTime = asText(state?.startTime).slice(0, 5)
+
+  function bookWithDoctor(doctor) {
+    const id = String(doctor?.id || '').trim()
+    if (!id) return
+    const bookingState = {
+      doctorId: id,
+      appointmentDate: draftDate || undefined,
+      note: asText(state?.note).trim() || undefined,
+    }
+    const deptId = String(doctor?.deptId || '').trim()
+    if (deptId) bookingState.deptId = deptId
+    navigate('/appointments', { state: bookingState })
+  }
 
   return (
     <div className="aichat-page">
@@ -222,42 +273,40 @@ export default function AIChat() {
             </div>
 
             <div className="aichat-card">
-              <div className="aichat-card-title">Chọn bác sĩ</div>
+              <div className="aichat-card-title">Bác sĩ được đề xuất</div>
               {suggestedDoctors.length ? (
                 <div className="aichat-doctor-list" role="list">
                   {suggestedDoctors.map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      className={`aichat-doctor-item ${String(state?.doctorId || '') === String(d.id) ? 'is-active' : ''}`}
-                      onClick={() => setState((s) => ({ ...s, doctorId: d.id }))}
-                      role="listitem"
-                    >
-                      <div className="aichat-doctor-name">{d.name}</div>
-                      <div className="aichat-doctor-spec">{d.specialty || 'Chuyên khoa'}</div>
-                    </button>
+                    <article key={d.id} className="aichat-doctor-card" role="listitem">
+                      <div className="aichat-doctor-card-head">
+                        <div className="aichat-doctor-avatar" aria-hidden="true">
+                          <span className="aichat-doctor-avatar-fallback">{getDoctorInitials(d.name)}</span>
+                          <img
+                            className="aichat-doctor-avatar-img"
+                            src={getDoctorAvatarSrc(d)}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none'
+                            }}
+                          />
+                        </div>
+                        <div className="aichat-doctor-card-meta">
+                          <div className="aichat-doctor-name">{d.name}</div>
+                          <div className="aichat-doctor-spec">{d.specialty || 'Chuyên khoa'}</div>
+                          {d.deptName ? <div className="aichat-doctor-dept">{d.deptName}</div> : null}
+                        </div>
+                      </div>
+                      <p className="aichat-doctor-bio">{getDoctorIntro(d)}</p>
+                      <button type="button" className="aichat-doctor-book" onClick={() => bookWithDoctor(d)}>
+                        Đặt lịch ngay
+                      </button>
+                    </article>
                   ))}
                 </div>
               ) : (
-                <div className="aichat-muted">Chưa có gợi ý. Hãy mô tả nhu cầu khám.</div>
+                <div className="aichat-muted">Chưa có gợi ý. Hãy cho biết nhu cầu khám hoặc khoa bạn muốn gặp.</div>
               )}
-            </div>
-
-            <div className="aichat-card">
-              <div className="aichat-card-title">Xác nhận đặt lịch</div>
-              <button
-                type="button"
-                className="aichat-confirm"
-                disabled={busy || !state?.doctorId || !draftDate || !draftTime}
-                onClick={() => {
-                  sendUserMessage('Xác nhận đặt lịch', { confirm: true })
-                }}
-              >
-                Xác nhận đặt lịch
-              </button>
-              <div className="aichat-muted" style={{ marginTop: 8 }}>
-                Nếu bạn muốn đổi ngày/giờ, gửi tin nhắn: “ngày 2026-05-10 lúc 09:00” hoặc “đổi sang chiều”.
-              </div>
             </div>
           </div>
 
@@ -279,7 +328,7 @@ export default function AIChat() {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Nhập triệu chứng / nhu cầu khám…"
+              placeholder="Nhập nhu cầu khám, khoa, ngày giờ…"
               aria-label="Nhập tin nhắn"
               disabled={busy}
             />
@@ -292,4 +341,3 @@ export default function AIChat() {
     </div>
   )
 }
-

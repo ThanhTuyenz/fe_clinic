@@ -288,6 +288,7 @@ export default function Appointment() {
   const requestedDoctorId = location.state?.doctorId
   const requestedDeptId = location.state?.deptId
   const requestedAppointmentDate = location.state?.appointmentDate
+  const requestedNote = location.state?.note
 
   const todayISO = useMemo(() => toISODate(new Date()), [])
   const maxISO = useMemo(() => toISODate(addMonthsClamped(new Date(), 3)), [])
@@ -305,7 +306,7 @@ export default function Appointment() {
   const [showDoctorDetail, setShowDoctorDetail] = useState(false)
   const [showBookingInfo, setShowBookingInfo] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [activeDeptId, setActiveDeptId] = useState('')
+  const [activeDeptId, setActiveDeptId] = useState(() => String(location.state?.deptId || '').trim())
   const [page, setPage] = useState(1)
 
   const [appointmentDate, setAppointmentDate] = useState(() => {
@@ -329,6 +330,18 @@ export default function Appointment() {
     const next = clampISODate(req, todayISO, maxISO)
     if (next && next !== appointmentDate) setAppointmentDate(next)
   }, [requestedAppointmentDate, todayISO, maxISO, appointmentDate])
+
+  useEffect(() => {
+    const nextNote = String(requestedNote || '').trim()
+    if (!nextNote) return
+    setNote(nextNote)
+  }, [requestedNote])
+
+  useEffect(() => {
+    const nextDeptId = String(requestedDeptId || '').trim()
+    if (!nextDeptId) return
+    setActiveDeptId(nextDeptId)
+  }, [requestedDeptId])
 
   const [patientDraft, setPatientDraft] = useState(() => {
     const u = user || {}
@@ -415,18 +428,12 @@ export default function Appointment() {
     listDoctors()
       .then((docs) => {
         setDoctors(docs)
-        const nextDeptId = String(requestedDeptId || '').trim()
-        if (nextDeptId && (docs || []).some((d) => String(d?.deptID || '').trim() === nextDeptId)) {
-          setActiveDeptId(nextDeptId)
+        if (requestedDoctorId && docs?.some((d) => d?.id === requestedDoctorId)) {
+          setDoctorId(requestedDoctorId)
+          setShowDoctorDetail(true)
+        } else if (!String(requestedDeptId || '').trim()) {
+          setDoctorId(docs[0] ? docs[0].id : '')
         }
-        const resolvedId =
-          requestedDoctorId && docs?.some((d) => d?.id === requestedDoctorId)
-            ? requestedDoctorId
-            : docs[0]
-              ? docs[0].id
-              : ''
-        setDoctorId(resolvedId)
-        setShowDoctorDetail(Boolean(requestedDoctorId))
         setShowBookingInfo(false)
         setDoctorLoadError('')
       })
@@ -505,14 +512,24 @@ export default function Appointment() {
       const prev = map.get(deptId)
       map.set(deptId, prev ? { ...prev, count: prev.count + 1 } : { id: deptId, name, count: 1 })
     }
+    for (const [id, name] of deptCatalog.entries()) {
+      if (!id || !name) continue
+      if (!map.has(id)) map.set(id, { id, name, count: 0 })
+    }
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'))
   }, [doctors, deptCatalog, specialtyToDept])
+
+  const doctorMatchesDept = (d, deptId) => {
+    if (!deptId) return true
+    const rawDept = String(d?.deptID || '').trim()
+    return resolveDeptId(d) === deptId || rawDept === deptId
+  }
 
   const filteredDoctors = useMemo(() => {
     const q = String(searchQuery || '').trim().toLowerCase()
     const deptId = String(activeDeptId || '').trim()
     return (doctors || []).filter((d) => {
-      if (deptId && resolveDeptId(d) !== deptId) return false
+      if (!doctorMatchesDept(d, deptId)) return false
       if (!q) return true
       const name = getDoctorFullName(d).toLowerCase()
       const rankName = getDoctorRankName(d).toLowerCase()
@@ -545,9 +562,12 @@ export default function Appointment() {
   // Keep selected doctor valid when filters change
   useEffect(() => {
     if (showDoctorDetail || showBookingInfo) return
-    if (!doctorId) return
+    if (!filteredDoctors.length) {
+      if (doctorId) setDoctorId('')
+      return
+    }
     if (filteredDoctors.some((d) => d.id === doctorId)) return
-    if (filteredDoctors[0]?.id) setDoctorId(filteredDoctors[0].id)
+    setDoctorId(filteredDoctors[0].id)
   }, [filteredDoctors, doctorId, showDoctorDetail, showBookingInfo])
 
   // Reset pagination when filters change
@@ -914,7 +934,10 @@ export default function Appointment() {
                       onClick={() => setActiveDeptId('')}
                       aria-label="Bỏ lọc khoa"
                     >
-                      {departments.find((s) => s.id === activeDeptId)?.name || 'Khoa'} ✕
+                      {departments.find((s) => s.id === activeDeptId)?.name ||
+                        deptCatalog.get(activeDeptId) ||
+                        'Khoa'}{' '}
+                      ✕
                     </button>
                   ) : null}
                   {searchQuery ? (
