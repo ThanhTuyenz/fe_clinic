@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { updateMe } from '../api/auth.js'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { getMe, updateMe } from '../api/auth.js'
 import { listMyAppointments } from '../api/appointments.js'
 import { listDepartments } from '../api/departments.js'
 import { listDoctors } from '../api/doctors.js'
@@ -43,6 +43,19 @@ function getUserInitials(u) {
     .map((w) => w[0])
     .join('')
   return letters.toUpperCase()
+}
+
+function buildPatientCode(userId) {
+  const raw = String(userId || '').replace(/[^a-fA-F0-9]/g, '')
+  const yy = String(new Date().getFullYear()).slice(-2)
+  const pad = (raw + '00000000').slice(0, 8).toUpperCase()
+  return `YM${yy}${pad}`
+}
+
+function resolvePatientCode(u) {
+  const stored = String(u?.patientCode || '').trim()
+  if (stored) return stored
+  return buildPatientCode(u?.id || u?._id)
 }
 
 function getTokenFromStorage() {
@@ -142,8 +155,58 @@ function getDoctorAvatarSrc(d) {
   return normalizeAvatarUrl(candidate)
 }
 
+function getDoctorId(d) {
+  return String(d?.id ?? d?._id ?? d?.doctorId ?? '').trim()
+}
+
+function isAppointmentExamined(status) {
+  const s = String(status || '').toLowerCase()
+  return s === 'examined' || s === 'completed' || s === 'done'
+}
+
+function getAppointmentDoctorId(appointment) {
+  const doc = appointment?.doctor
+  const rawDoctorId =
+    doc?.id ??
+    doc?.doctorId ??
+    doc?._id ??
+    appointment?.doctorId ??
+    appointment?.doctorID ??
+    ''
+  return String(rawDoctorId || '').trim()
+}
+
+function addDaysToIsoDate(isoDate, days) {
+  const base = String(isoDate || '').trim().slice(0, 10)
+  if (!base) return ''
+  const d = new Date(`${base}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+function suggestFollowUpDateIso(appointmentDate) {
+  const today = new Date().toISOString().slice(0, 10)
+  const base = String(appointmentDate || '').trim().slice(0, 10) || today
+  const suggested = addDaysToIsoDate(base, 14)
+  if (!suggested) return today
+  return suggested < today ? today : suggested
+}
+
+function appointmentStartDate(appointment) {
+  const dateIso = String(appointment?.appointmentDate || '').slice(0, 10)
+  const start = String(appointment?.startTime || '').trim()
+  if (dateIso && start) {
+    const dt = new Date(`${dateIso}T${start}:00`)
+    if (!Number.isNaN(dt.getTime())) return dt
+  }
+  const fallback = new Date(appointment?.appointmentDate)
+  return fallback
+}
+
 export default function Landing() {
   const navigate = useNavigate()
+  const location = useLocation()
 
   function getStoredUser() {
     try {
@@ -164,6 +227,8 @@ export default function Landing() {
   const user = getStoredUser()
   const userName = getUserDisplayName(user)
   const userEmail = getUserEmail(user)
+  const userIdentityKey = String(user?.id ?? user?._id ?? userEmail ?? '').trim()
+  const profilePatientCode = resolvePatientCode(user)
 
   const [doctors, setDoctors] = useState([])
   const [loadingDoctors, setLoadingDoctors] = useState(true)
@@ -173,11 +238,17 @@ export default function Landing() {
   const [loadingDepartments, setLoadingDepartments] = useState(true)
   const [departmentError, setDepartmentError] = useState('')
 
-  const [nearestApptDoctor, setNearestApptDoctor] = useState(null)
+  const [visitAppointments, setVisitAppointments] = useState([])
+  const doctorStripRef = useRef(null)
 
   const [patientInfoModalOpen, setPatientInfoModalOpen] = useState(false)
+  const [patientInfoModalMode, setPatientInfoModalMode] = useState('booking')
+  const [patientInfoSaving, setPatientInfoSaving] = useState(false)
   const [patientInfoError, setPatientInfoError] = useState('')
   const [patientInfoDraft, setPatientInfoDraft] = useState(() => ({
+    firstName: '',
+    lastName: '',
+    phone: '',
     dob: '',
     ethnicity: 'Kinh',
     gender: 'Nam',
@@ -198,22 +269,54 @@ export default function Landing() {
     return 'Khác'
   }
 
-  function openPatientInfoModal(nextState) {
-    setPatientInfoError('')
-    setPendingBookingState(nextState || null)
-    const u = getStoredUser() || {}
+  function applyPatientInfoDraft(u) {
     setPatientInfoDraft({
+      firstName: String(u?.firstName || '').trim(),
+      lastName: String(u?.lastName || '').trim(),
+      phone: String(u?.phone || '').trim(),
       dob: String(u?.dob || '').slice(0, 10),
       ethnicity: String(u?.ethnicity || '').trim() || 'Kinh',
       gender: normalizeGenderLabel(u?.gender),
       citizenId: String(u?.citizenId || u?.cccd || u?.idCard || '').trim(),
       addressLine: String(u?.address || u?.addressLine || '').trim(),
     })
+  }
+
+  function openPatientInfoModal(nextState, mode = 'booking') {
+    setPatientInfoError('')
+    setPatientInfoModalMode(mode)
+    setPendingBookingState(nextState || null)
+    applyPatientInfoDraft(getStoredUser() || {})
     setPatientInfoModalOpen(true)
+  }
+
+  async function openProfileInfoModal() {
+    if (!getStoredUser()) {
+      navigate('/login', { replace: false, state: { message: 'Vui lòng đăng nhập để xem thông tin cá nhân.' } })
+      return
+    }
+
+    openPatientInfoModal(null, 'profile')
+
+    const token = getTokenFromStorage()
+    if (!token) return
+
+    try {
+      const data = await getMe({ token })
+      const me = data?.user || null
+      if (!me) return
+      const storage = getStorageForUser()
+      storage.setItem('user', JSON.stringify(me))
+      applyPatientInfoDraft(me)
+    } catch {
+      /* giữ bản nháp từ bộ nhớ cục bộ */
+    }
   }
 
   function closePatientInfoModal() {
     setPatientInfoModalOpen(false)
+    setPatientInfoModalMode('booking')
+    setPatientInfoSaving(false)
     setPatientInfoError('')
     setPendingBookingState(null)
   }
@@ -225,6 +328,23 @@ export default function Landing() {
     const address = String(u?.address || '').trim()
     const gender = String(u?.gender ?? '').trim()
     return Boolean(dob && ethnicity && gender && citizenId && address)
+  }
+
+  function buildDoctorBookingState(d, examinedDoctorDates) {
+    const doctorId = getDoctorId(d)
+    const state = doctorId ? { doctorId } : {}
+    const lastExaminedDate = doctorId ? examinedDoctorDates.get(doctorId) : ''
+    if (!lastExaminedDate) return state
+    return {
+      ...state,
+      appointmentDate: suggestFollowUpDateIso(lastExaminedDate),
+      note: 'Tái khám',
+    }
+  }
+
+  function getDoctorBookingLabel(d, examinedDoctorDates) {
+    const doctorId = getDoctorId(d)
+    return doctorId && examinedDoctorDates.has(doctorId) ? 'Đặt lịch tái khám' : 'Đặt lịch khám'
   }
 
   function handleBookClick(state = {}) {
@@ -241,6 +361,9 @@ export default function Landing() {
 
   async function savePatientInfo() {
     setPatientInfoError('')
+    const firstName = String(patientInfoDraft.firstName || '').trim()
+    const lastName = String(patientInfoDraft.lastName || '').trim()
+    const phone = String(patientInfoDraft.phone || '').trim()
     const dob = String(patientInfoDraft.dob || '').trim()
     const ethnicity = String(patientInfoDraft.ethnicity || '').trim()
     const gender = String(patientInfoDraft.gender || '').trim()
@@ -252,6 +375,11 @@ export default function Landing() {
       return
     }
 
+    if (patientInfoModalMode === 'profile' && (!firstName || !lastName || !phone)) {
+      setPatientInfoError('Vui lòng nhập đầy đủ họ, tên và số điện thoại.')
+      return
+    }
+
     const storage = getStorageForUser()
     const token = storage.getItem('token')
     if (!token) {
@@ -260,30 +388,54 @@ export default function Landing() {
     }
 
     const genderToSend = gender === 'Nam' ? true : gender === 'Nữ' ? false : gender
+    const payload = {
+      dob,
+      ethnicity,
+      citizenId,
+      address: addressLine,
+      gender: genderToSend,
+    }
+    if (patientInfoModalMode === 'profile') {
+      payload.firstName = firstName
+      payload.lastName = lastName
+      payload.phone = phone
+    }
+
+    setPatientInfoSaving(true)
     try {
       const data = await updateMe({
         token,
-        payload: {
-          dob,
-          ethnicity,
-          citizenId,
-          address: addressLine,
-          gender: genderToSend,
-        },
+        payload,
       })
       const updatedUser = data?.user || data?.data?.user || null
       if (!updatedUser) {
         throw new Error('Máy chủ không trả về dữ liệu hồ sơ sau khi cập nhật.')
       }
       storage.setItem('user', JSON.stringify(updatedUser))
+      if (patientInfoModalMode === 'profile') {
+        applyPatientInfoDraft(updatedUser)
+        setPatientInfoModalOpen(false)
+        setPatientInfoModalMode('booking')
+        setPendingBookingState(null)
+        return
+      }
       setPatientInfoModalOpen(false)
       const state = pendingBookingState || {}
       setPendingBookingState(null)
       navigate('/appointments', { state })
     } catch (err) {
       setPatientInfoError(err?.message || 'Không lưu được hồ sơ lên máy chủ.')
+    } finally {
+      setPatientInfoSaving(false)
     }
   }
+
+  useEffect(() => {
+    if (!location.state?.openPatientInfo) return
+    if (!getStoredUser()) return
+    openProfileInfoModal()
+    navigate(location.pathname, { replace: true, state: {} })
+  }, [location.pathname, location.state?.openPatientInfo, navigate])
 
   useEffect(() => {
     let mounted = true
@@ -336,59 +488,112 @@ export default function Landing() {
   const featuredDoctors = useMemo(() => doctors.slice(0, 10), [doctors])
 
   useEffect(() => {
-    if (!user) return
-    const token = getTokenFromStorage()
-    if (!token) return
-    let cancelled = false
-
-    function apptStartDate(a) {
-      const dateIso = String(a?.appointmentDate || '').slice(0, 10)
-      const start = String(a?.startTime || '').trim()
-      if (dateIso && start) {
-        const dt = new Date(`${dateIso}T${start}:00`)
-        if (!Number.isNaN(dt.getTime())) return dt
-      }
-      const fallback = new Date(a?.appointmentDate)
-      return fallback
+    if (!userIdentityKey) {
+      setVisitAppointments([])
+      return undefined
     }
 
-    ;(async () => {
-      try {
-        const rows = await listMyAppointments({ token })
-        if (cancelled) return
-        const now = Date.now()
-        const candidates = (rows || [])
-          .filter((a) => String(a?.status || '').toLowerCase() !== 'cancelled')
-          .map((a) => ({ a, dt: apptStartDate(a) }))
-          .filter((x) => x.dt instanceof Date && !Number.isNaN(x.dt.getTime()) && x.dt.getTime() >= now)
-          .sort((x, y) => x.dt.getTime() - y.dt.getTime())
+    const token = getTokenFromStorage()
+    if (!token) {
+      setVisitAppointments([])
+      return undefined
+    }
 
-        const nearest = candidates[0]?.a || null
-        const doc = nearest?.doctor || null
-        setNearestApptDoctor(doc)
-      } catch {
-        // ignore: fallback to featured doctors
-        setNearestApptDoctor(null)
-      }
-    })()
+    let cancelled = false
+
+    listMyAppointments({ token })
+      .then((rows) => {
+        if (!cancelled) setVisitAppointments(rows || [])
+      })
+      .catch(() => {
+        if (!cancelled) setVisitAppointments([])
+      })
 
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [userIdentityKey])
+
+  const visitInsights = useMemo(() => {
+    const doctorById = new Map()
+    const doctorByEmail = new Map()
+    for (const d of doctors) {
+      const id = getDoctorId(d)
+      if (id) doctorById.set(id, d)
+      const email = String(d?.email || '').trim().toLowerCase()
+      if (email) doctorByEmail.set(email, d)
+    }
+
+    function resolveAppointmentDoctor(appointment) {
+      const doc = appointment?.doctor
+      const directId = getDoctorId(doc) || getAppointmentDoctorId(appointment)
+      if (directId && doctorById.has(directId)) return doctorById.get(directId)
+      const email = String(doc?.email || appointment?.doctorEmail || '').trim().toLowerCase()
+      if (email && doctorByEmail.has(email)) return doctorByEmail.get(email)
+      if (doc && (getDoctorId(doc) || getDoctorFullName(doc))) return doc
+      if (directId) return doctorById.get(directId) || null
+      return null
+    }
+
+    const activeRows = (visitAppointments || []).filter(
+      (a) => String(a?.status || '').toLowerCase() !== 'cancelled',
+    )
+    const now = Date.now()
+    const upcoming = activeRows
+      .map((a) => ({ a, dt: appointmentStartDate(a) }))
+      .filter((x) => x.dt instanceof Date && !Number.isNaN(x.dt.getTime()) && x.dt.getTime() >= now)
+      .sort((x, y) => x.dt.getTime() - y.dt.getTime())
+
+    const nearestApptDoctor = resolveAppointmentDoctor(upcoming[0]?.a || null)
+
+    const examinedDoctorDates = new Map()
+    for (const a of activeRows) {
+      if (!isAppointmentExamined(a?.status)) continue
+      const doc = resolveAppointmentDoctor(a)
+      const doctorId = doc ? getDoctorId(doc) : getAppointmentDoctorId(a)
+      if (!doctorId) continue
+      const dateIso = String(a?.appointmentDate || '').slice(0, 10)
+      if (!dateIso) continue
+      const prev = examinedDoctorDates.get(doctorId)
+      if (!prev || dateIso > prev) examinedDoctorDates.set(doctorId, dateIso)
+    }
+
+    return { nearestApptDoctor, examinedDoctorDates }
+  }, [visitAppointments, doctors])
+
+  const loadingDoctorStrip = loadingDoctors
 
   const normalizedDoctorQuery = useMemo(() => String(doctorQuery || '').trim().toLowerCase(), [doctorQuery])
 
   const visibleDoctors = useMemo(() => {
-    const baseList = (() => {
-      if (!nearestApptDoctor) return featuredDoctors
-      const nearestId = String(nearestApptDoctor?.id ?? nearestApptDoctor?._id ?? '').trim()
-      const rest = featuredDoctors.filter((d) => {
-        const did = String(d?.id ?? d?._id ?? '').trim()
-        return !(nearestId && did && did === nearestId)
-      })
-      return [nearestApptDoctor, ...rest].slice(0, 10)
-    })()
+    const { nearestApptDoctor, examinedDoctorDates } = visitInsights
+    const doctorById = new Map()
+    for (const d of doctors) {
+      const id = getDoctorId(d)
+      if (id) doctorById.set(id, d)
+    }
+
+    const recommended = []
+    const seenIds = new Set()
+    const pushDoctor = (doc) => {
+      if (!doc) return
+      const full = doctorById.get(getDoctorId(doc)) || doc
+      const id = getDoctorId(full)
+      if (!id || seenIds.has(id)) return
+      seenIds.add(id)
+      recommended.push(full)
+    }
+
+    pushDoctor(nearestApptDoctor)
+
+    const examinedEntries = [...examinedDoctorDates.entries()].sort((a, b) => b[1].localeCompare(a[1]))
+    for (const [doctorId] of examinedEntries) {
+      pushDoctor(doctorById.get(doctorId))
+    }
+
+    const restPool = normalizedDoctorQuery ? doctors : featuredDoctors
+    const rest = restPool.filter((d) => !seenIds.has(getDoctorId(d)))
+    const baseList = [...recommended, ...rest].slice(0, 10)
 
     if (!normalizedDoctorQuery) return baseList
     const q = normalizedDoctorQuery
@@ -406,7 +611,21 @@ export default function Landing() {
         email.includes(q)
       )
     })
-  }, [featuredDoctors, normalizedDoctorQuery, nearestApptDoctor])
+  }, [visitInsights, doctors, featuredDoctors, normalizedDoctorQuery])
+
+  const visibleDoctorKeys = useMemo(
+    () =>
+      visibleDoctors
+        .map((d) => getDoctorId(d) || String(d?.email || getDoctorFullName(d) || '').trim())
+        .join('|'),
+    [visibleDoctors],
+  )
+
+  useLayoutEffect(() => {
+    const el = doctorStripRef.current
+    if (!el) return
+    el.scrollLeft = 0
+  }, [visibleDoctorKeys, loadingDoctorStrip, normalizedDoctorQuery])
 
   const featuredDepartments = useMemo(
     () =>
@@ -462,9 +681,14 @@ export default function Landing() {
                     <Link className="landing-user-menu-item" to="/ai" role="menuitem">
                       Trợ lý đặt lịch
                     </Link>
-                    <Link className="landing-user-menu-item" to="/home" role="menuitem">
+                    <button
+                      type="button"
+                      className="landing-user-menu-item"
+                      onClick={openProfileInfoModal}
+                      role="menuitem"
+                    >
                       Thông tin
-                    </Link>
+                    </button>
                     <button
                       type="button"
                       className="landing-user-menu-item landing-user-menu-logout"
@@ -510,13 +734,18 @@ export default function Landing() {
           </p>
           <div className="landing-hero-cta">
             {user ? (
-              <button
-                type="button"
-                className="landing-btn landing-btn--solid"
-                onClick={() => handleBookClick({})}
-              >
-                Đặt lịch khám
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="landing-btn landing-btn--solid"
+                  onClick={() => handleBookClick({})}
+                >
+                  Đặt lịch khám
+                </button>
+                <Link className="landing-btn landing-btn--ghost" to="/ai">
+                  Trợ lý đặt lịch
+                </Link>
+              </>
             ) : (
               <>
                 <Link className="landing-btn landing-btn--solid" to="/register">
@@ -524,6 +753,9 @@ export default function Landing() {
                 </Link>
                 <Link className="landing-btn landing-btn--ghost" to="/login">
                   Đã có tài khoản
+                </Link>
+                <Link className="landing-btn landing-btn--ghost" to="/ai">
+                  Trợ lý đặt lịch
                 </Link>
               </>
             )}
@@ -568,8 +800,8 @@ export default function Landing() {
             </Link>
           </div>
 
-          <div className="landing-doctor-strip" role="list" aria-label="Đặt khám bác sĩ">
-            {loadingDoctors
+          <div className="landing-doctor-strip" ref={doctorStripRef} role="list" aria-label="Đặt khám bác sĩ">
+            {loadingDoctorStrip
               ? Array.from({ length: 5 }).map((_, idx) => (
                   <article className="landing-doctor-card is-skeleton" role="listitem" key={`sk-${idx}`}>
                     <div className="landing-doctor-avatar" aria-hidden="true" style={{ opacity: 0.55 }}>
@@ -594,7 +826,10 @@ export default function Landing() {
                     </div>
                   )
                 : visibleDoctors.length ? (
-                    visibleDoctors.map((d) => (
+                    visibleDoctors.map((d) => {
+                      const bookingState = buildDoctorBookingState(d, visitInsights.examinedDoctorDates)
+                      const bookingLabel = getDoctorBookingLabel(d, visitInsights.examinedDoctorDates)
+                      return (
                       <article
                         className="landing-doctor-card"
                         role="listitem"
@@ -602,12 +837,12 @@ export default function Landing() {
                         tabIndex={0}
                         style={{ cursor: 'pointer' }}
                         onClick={() => {
-                          handleBookClick({ doctorId: d.id })
+                          handleBookClick(bookingState)
                         }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            handleBookClick({ doctorId: d.id })
+                            handleBookClick(bookingState)
                           }
                         }}
                       >
@@ -635,13 +870,14 @@ export default function Landing() {
                           className="landing-doctor-action"
                           onClick={(e) => {
                             e.stopPropagation()
-                            handleBookClick({ doctorId: d.id })
+                            handleBookClick(bookingState)
                           }}
                         >
-                          Đặt lịch khám <span className="landing-doctor-action-arrow" aria-hidden="true">›</span>
+                          {bookingLabel} <span className="landing-doctor-action-arrow" aria-hidden="true">›</span>
                         </button>
                       </article>
-                    ))
+                      )
+                    })
                   ) : (
                     <div style={{ padding: '10px 0', color: 'var(--muted)', fontWeight: 800 }}>
                       Không tìm thấy bác sĩ phù hợp.
@@ -818,21 +1054,25 @@ export default function Landing() {
           className="landing-modal-overlay"
           role="dialog"
           aria-modal="true"
-          aria-label="Bổ sung hồ sơ bệnh nhân"
+          aria-label={patientInfoModalMode === 'profile' ? 'Thông tin cá nhân' : 'Bổ sung hồ sơ bệnh nhân'}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closePatientInfoModal()
           }}
         >
-          <div className="landing-modal">
+          <div className={`landing-modal${patientInfoModalMode === 'profile' ? ' landing-modal--profile' : ''}`}>
             <div className="landing-modal-head">
-              <div className="landing-modal-title">Bổ sung hồ sơ bệnh nhân</div>
+              <div className="landing-modal-title">
+                {patientInfoModalMode === 'profile' ? 'Thông tin cá nhân' : 'Bổ sung hồ sơ bệnh nhân'}
+              </div>
               <button type="button" className="landing-modal-close" onClick={closePatientInfoModal} aria-label="Đóng">
                 ×
               </button>
             </div>
 
             <p className="landing-modal-sub">
-              Để tiếp tục đặt lịch khám, vui lòng nhập thêm thông tin bắt buộc.
+              {patientInfoModalMode === 'profile'
+                ? 'Cập nhật hồ sơ bệnh nhân và dùng mã QR khi đến quầy tiếp đón.'
+                : 'Để tiếp tục đặt lịch khám, vui lòng nhập thêm thông tin bắt buộc.'}
             </p>
 
             {patientInfoError ? (
@@ -841,65 +1081,136 @@ export default function Landing() {
               </div>
             ) : null}
 
-            <div className="landing-modal-grid">
-              <div className="landing-modal-field">
-                <label htmlFor="pi-dob">Ngày sinh *</label>
-                <input
-                  id="pi-dob"
-                  type="date"
-                  value={patientInfoDraft.dob}
-                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, dob: e.target.value }))}
-                />
+            <div
+              className={
+                patientInfoModalMode === 'profile'
+                  ? 'landing-modal-profile-layout'
+                  : 'landing-modal-grid'
+              }
+            >
+              <div className="landing-modal-grid">
+                {patientInfoModalMode === 'profile' ? (
+                  <>
+                    <div className="landing-modal-field">
+                      <label htmlFor="pi-last-name">Họ *</label>
+                      <input
+                        id="pi-last-name"
+                        value={patientInfoDraft.lastName}
+                        onChange={(e) => setPatientInfoDraft((d) => ({ ...d, lastName: e.target.value }))}
+                        autoComplete="family-name"
+                      />
+                    </div>
+
+                    <div className="landing-modal-field">
+                      <label htmlFor="pi-first-name">Tên *</label>
+                      <input
+                        id="pi-first-name"
+                        value={patientInfoDraft.firstName}
+                        onChange={(e) => setPatientInfoDraft((d) => ({ ...d, firstName: e.target.value }))}
+                        autoComplete="given-name"
+                      />
+                    </div>
+
+                    <div className="landing-modal-field landing-modal-field--full">
+                      <label htmlFor="pi-phone">Số điện thoại *</label>
+                      <input
+                        id="pi-phone"
+                        type="tel"
+                        inputMode="tel"
+                        value={patientInfoDraft.phone}
+                        onChange={(e) => setPatientInfoDraft((d) => ({ ...d, phone: e.target.value }))}
+                        autoComplete="tel"
+                      />
+                    </div>
+
+                    <div className="landing-modal-field landing-modal-field--full">
+                      <label htmlFor="pi-email">Email</label>
+                      <input id="pi-email" value={userEmail || '—'} readOnly />
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="landing-modal-field">
+                  <label htmlFor="pi-dob">Ngày sinh *</label>
+                  <input
+                    id="pi-dob"
+                    type="date"
+                    value={patientInfoDraft.dob}
+                    onChange={(e) => setPatientInfoDraft((d) => ({ ...d, dob: e.target.value }))}
+                  />
+                </div>
+
+                <div className="landing-modal-field">
+                  <label htmlFor="pi-ethnicity">Dân tộc *</label>
+                  <input
+                    id="pi-ethnicity"
+                    value={patientInfoDraft.ethnicity}
+                    onChange={(e) => setPatientInfoDraft((d) => ({ ...d, ethnicity: e.target.value }))}
+                    placeholder="vd: Kinh"
+                  />
+                </div>
+
+                <div className="landing-modal-field">
+                  <label htmlFor="pi-gender">Giới tính *</label>
+                  <select
+                    id="pi-gender"
+                    value={patientInfoDraft.gender}
+                    onChange={(e) => setPatientInfoDraft((d) => ({ ...d, gender: e.target.value }))}
+                  >
+                    <option value="Nam">Nam</option>
+                    <option value="Nữ">Nữ</option>
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+
+                <div className="landing-modal-field">
+                  <label htmlFor="pi-cccd">Số CCCD *</label>
+                  <input
+                    id="pi-cccd"
+                    inputMode="numeric"
+                    value={patientInfoDraft.citizenId}
+                    onChange={(e) => setPatientInfoDraft((d) => ({ ...d, citizenId: e.target.value }))}
+                    placeholder="12 số"
+                  />
+                </div>
+
+                <div className="landing-modal-field landing-modal-field--full">
+                  <label htmlFor="pi-address">Địa chỉ cụ thể *</label>
+                  <input
+                    id="pi-address"
+                    value={patientInfoDraft.addressLine}
+                    onChange={(e) => setPatientInfoDraft((d) => ({ ...d, addressLine: e.target.value }))}
+                    placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành"
+                  />
+                </div>
               </div>
 
-              <div className="landing-modal-field">
-                <label htmlFor="pi-ethnicity">Dân tộc *</label>
-                <input
-                  id="pi-ethnicity"
-                  value={patientInfoDraft.ethnicity}
-                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, ethnicity: e.target.value }))}
-                  placeholder="vd: Kinh"
-                />
-              </div>
-
-              <div className="landing-modal-field">
-                <label htmlFor="pi-gender">Giới tính *</label>
-                <select
-                  id="pi-gender"
-                  value={patientInfoDraft.gender}
-                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, gender: e.target.value }))}
-                >
-                  <option value="Nam">Nam</option>
-                  <option value="Nữ">Nữ</option>
-                  <option value="Khác">Khác</option>
-                </select>
-              </div>
-
-              <div className="landing-modal-field">
-                <label htmlFor="pi-cccd">Số CCCD *</label>
-                <input
-                  id="pi-cccd"
-                  inputMode="numeric"
-                  value={patientInfoDraft.citizenId}
-                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, citizenId: e.target.value }))}
-                  placeholder="12 số"
-                />
-              </div>
-
-              <div className="landing-modal-field landing-modal-field--full">
-                <label htmlFor="pi-address">Địa chỉ cụ thể *</label>
-                <input
-                  id="pi-address"
-                  value={patientInfoDraft.addressLine}
-                  onChange={(e) => setPatientInfoDraft((d) => ({ ...d, addressLine: e.target.value }))}
-                  placeholder="Số nhà, tên đường, phường/xã, quận/huyện, tỉnh/thành"
-                />
-              </div>
+              {patientInfoModalMode === 'profile' ? (
+                <aside className="landing-modal-qr" aria-label="Mã QR bệnh nhân">
+                  <div className="landing-modal-qr-label">Mã bệnh nhân</div>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(profilePatientCode)}`}
+                    width="160"
+                    height="160"
+                    alt={`Mã QR bệnh nhân ${profilePatientCode}`}
+                  />
+                  <code>{profilePatientCode}</code>
+                </aside>
+              ) : null}
             </div>
 
             <div className="landing-modal-actions">
-              <button type="button" className="landing-modal-save" onClick={savePatientInfo}>
-                Lưu &amp; tiếp tục
+              <button
+                type="button"
+                className="landing-modal-save"
+                onClick={savePatientInfo}
+                disabled={patientInfoSaving}
+              >
+                {patientInfoSaving
+                  ? 'Đang lưu...'
+                  : patientInfoModalMode === 'profile'
+                    ? 'Lưu thông tin'
+                    : 'Lưu & tiếp tục'}
               </button>
             </div>
           </div>

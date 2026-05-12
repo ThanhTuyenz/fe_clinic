@@ -478,6 +478,48 @@
   cursor: not-allowed;
 }
 
+.landing-modal--profile {
+  width: min(860px, 100%);
+}
+
+.landing-modal-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 16px;
+  align-items: start;
+}
+
+.landing-modal-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.landing-modal-qr-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.landing-modal-qr img {
+  width: 140px;
+  height: 140px;
+  display: block;
+}
+
+.landing-modal-qr code {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f766e;
+  word-break: break-all;
+  text-align: center;
+}
+
 .landing-booking-head {
   display: flex;
   align-items: center;
@@ -525,6 +567,7 @@
   display: flex;
   gap: 14px;
   overflow-x: auto;
+  overflow-anchor: none;
   padding: 10px 2px 14px;
   scroll-snap-type: x mandatory;
 }
@@ -938,6 +981,10 @@
   }
 
   .landing-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-modal-profile-layout {
     grid-template-columns: 1fr;
   }
 

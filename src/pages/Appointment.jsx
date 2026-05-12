@@ -804,7 +804,7 @@ export default function Appointment() {
                   <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                     Lịch khám
                   </Link>
-                  <Link className="landing-user-menu-item" to="/home" role="menuitem">
+                  <Link className="landing-user-menu-item" to="/home" state={{ openPatientInfo: true }} role="menuitem">
                     Thông tin
                   </Link>
                   <button

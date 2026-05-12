@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { aiChat } from '../api/ai.js'
+import {
+  AI_CHAT_WELCOME_MESSAGE,
+  clearAiChatHistory,
+  getAiChatUserId,
+  loadAiChatHistory,
+  saveAiChatHistory,
+} from '../lib/aiChatHistory.js'
 import logo from '../assets/logo.png'
 import '../styles/landing.css'
 import '../styles/ai-chat.css'
@@ -103,17 +110,14 @@ export default function AIChat() {
   const userName = getUserDisplayName(user)
   const userEmail = getUserEmail(user)
 
-  const [messages, setMessages] = useState(() => [
-    {
-      role: 'assistant',
-      content:
-        'Chào bạn! Mình là trợ lý đặt lịch. Bạn cứ nói rõ nhu cầu khám, khoa muốn gặp, hoặc ngày giờ mong muốn — mình sẽ bám theo để gợi ý lịch phù hợp.',
-    },
-  ])
+  const patientId = getAiChatUserId(user)
+
+  const [messages, setMessages] = useState(() => [AI_CHAT_WELCOME_MESSAGE])
   const [draft, setDraft] = useState('')
   const [state, setState] = useState({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [historyReady, setHistoryReady] = useState(false)
 
   const scrollerRef = useRef(null)
 
@@ -122,6 +126,19 @@ export default function AIChat() {
       navigate('/login', { replace: true })
     }
   }, [token, user, navigate])
+
+  useEffect(() => {
+    if (!patientId) return
+    const saved = loadAiChatHistory(patientId)
+    setMessages(saved.messages)
+    setState(saved.state)
+    setHistoryReady(true)
+  }, [patientId])
+
+  useEffect(() => {
+    if (!historyReady || !patientId) return
+    saveAiChatHistory(patientId, { messages, state })
+  }, [historyReady, patientId, messages, state])
 
   useEffect(() => {
     const el = scrollerRef.current
@@ -139,8 +156,16 @@ export default function AIChat() {
     const nextState = patchState ? { ...state, ...patchState } : state
     setMessages(nextMessages)
 
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), 45000)
+
     try {
-      const data = await aiChat({ token, messages: nextMessages, state: nextState })
+      const data = await aiChat({
+        token,
+        messages: nextMessages.slice(-16),
+        state: nextState,
+        signal: controller.signal,
+      })
       const assistant = data?.assistant
       if (assistant?.role && assistant?.content) {
         setMessages((cur) => [...cur, assistant])
@@ -149,10 +174,24 @@ export default function AIChat() {
         setState(data.state)
       }
     } catch (err) {
-      setError(err?.message || 'Không gửi được tin nhắn.')
+      if (err?.name === 'AbortError') {
+        setError('Trợ lý phản hồi quá lâu. Hãy thử lại hoặc đặt lịch thủ công.')
+      } else {
+        setError(err?.message || 'Không gửi được tin nhắn.')
+      }
     } finally {
+      window.clearTimeout(timeoutId)
       setBusy(false)
     }
+  }
+
+  function startNewConversation() {
+    if (!patientId) return
+    clearAiChatHistory(patientId)
+    setMessages([AI_CHAT_WELCOME_MESSAGE])
+    setState({})
+    setDraft('')
+    setError('')
   }
 
   function logout() {
@@ -210,7 +249,7 @@ export default function AIChat() {
                   <Link className="landing-user-menu-item" to="/my-appointments" role="menuitem">
                     Lịch khám
                   </Link>
-                  <Link className="landing-user-menu-item" to="/home" role="menuitem">
+                  <Link className="landing-user-menu-item" to="/home" state={{ openPatientInfo: true }} role="menuitem">
                     Thông tin
                   </Link>
                   <button
@@ -237,9 +276,14 @@ export default function AIChat() {
                 Lưu ý: Trợ lý chỉ hỗ trợ sàng lọc và đặt lịch, không thay thế bác sĩ.
               </div>
             </div>
-            <Link className="aichat-link" to="/appointments">
-              Đặt lịch thủ công →
-            </Link>
+            <div className="aichat-head-actions">
+              <button type="button" className="aichat-link aichat-link--button" onClick={startNewConversation} disabled={busy}>
+                Cuộc trò chuyện mới
+              </button>
+              <Link className="aichat-link" to="/appointments">
+                Đặt lịch thủ công →
+              </Link>
+            </div>
           </div>
 
           <div className="aichat-body" ref={scrollerRef} role="log" aria-label="Hội thoại">
@@ -250,7 +294,7 @@ export default function AIChat() {
             ))}
             {busy ? (
               <div className="aichat-msg is-assistant">
-                <div className="aichat-bubble aichat-bubble--muted">Đang xử lý…</div>
+                <div className="aichat-bubble aichat-bubble--muted">Đang gợi ý khoa và bác sĩ phù hợp…</div>
               </div>
             ) : null}
           </div>

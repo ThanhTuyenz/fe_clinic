@@ -30,6 +30,13 @@
   backdrop-filter: blur(10px);
 }
 
+.aichat-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .aichat-title {
   font-size: 1.15rem;
   font-weight: 900;
@@ -56,6 +63,16 @@
 
 .aichat-link:hover {
   filter: brightness(0.98);
+}
+
+.aichat-link--button {
+  cursor: pointer;
+  font: inherit;
+}
+
+.aichat-link--button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .aichat-body {

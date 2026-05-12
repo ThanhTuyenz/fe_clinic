@@ -5,7 +5,7 @@ function authHeaders(token) {
   return t ? { Authorization: `Bearer ${t}` } : {}
 }
 
-export async function aiChat({ token, messages, state }) {
+export async function aiChat({ token, messages, state, signal }) {
   const base = getApiBase()
   const res = await fetch(`${base}/api/ai/chat`, {
     method: 'POST',
@@ -14,6 +14,7 @@ export async function aiChat({ token, messages, state }) {
       ...authHeaders(token),
     },
     body: JSON.stringify({ messages, state }),
+    signal,
   })
 
   const data = await parseJsonResponse(res)
